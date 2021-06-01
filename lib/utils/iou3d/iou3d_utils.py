@@ -40,7 +40,7 @@ def boxes_iou3d_gpu(boxes_a, boxes_b):
 
     max_of_min = torch.max(boxes_a_height_min, boxes_b_height_min)
     min_of_max = torch.min(boxes_a_height_max, boxes_b_height_max)
-    overlaps_h = torch.clamp(min_of_max - max_of_min, min = 0)
+    overlaps_h = torch.clamp(min_of_max - max_of_min, min=0)
 
     # 3d iou
     overlaps_3d = overlaps_bev * overlaps_h
@@ -48,7 +48,7 @@ def boxes_iou3d_gpu(boxes_a, boxes_b):
     vol_a = (boxes_a[:, 3] * boxes_a[:, 4] * boxes_a[:, 5]).view(-1, 1)
     vol_b = (boxes_b[:, 3] * boxes_b[:, 4] * boxes_b[:, 5]).view(1, -1)
 
-    iou3d = overlaps_3d / torch.clamp(vol_a + vol_b - overlaps_3d, min = 1e-7)
+    iou3d = overlaps_3d / torch.clamp(vol_a + vol_b - overlaps_3d, min=1e-7)
 
     return iou3d
 
@@ -61,7 +61,7 @@ def nms_gpu(boxes, scores, thresh):
     :return:
     """
     # areas = (x2 - x1) * (y2 - y1)
-    order = scores.sort(0, descending = True)[1]
+    order = scores.sort(0, descending=True)[1]
 
     boxes = boxes[order].contiguous()
 
@@ -78,7 +78,7 @@ def nms_normal_gpu(boxes, scores, thresh):
     :return:
     """
     # areas = (x2 - x1) * (y2 - y1)
-    order = scores.sort(0, descending = True)[1]
+    order = scores.sort(0, descending=True)[1]
 
     boxes = boxes[order].contiguous()
 

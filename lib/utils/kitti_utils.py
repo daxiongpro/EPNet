@@ -52,9 +52,9 @@ def rotate_pc_along_y_torch(pc, rot_angle):
     cosa = torch.cos(rot_angle).view(-1, 1)  # (N, 1)
     sina = torch.sin(rot_angle).view(-1, 1)  # (N, 1)
 
-    raw_1 = torch.cat([cosa, -sina], dim = 1)  # (N, 2)
-    raw_2 = torch.cat([sina, cosa], dim = 1)  # (N, 2)
-    R = torch.cat((raw_1.unsqueeze(dim = 1), raw_2.unsqueeze(dim = 1)), dim = 1)  # (N, 2, 2)
+    raw_1 = torch.cat([cosa, -sina], dim=1)  # (N, 2)
+    raw_2 = torch.cat([sina, cosa], dim=1)  # (N, 2)
+    R = torch.cat((raw_1.unsqueeze(dim=1), raw_2.unsqueeze(dim=1)), dim=1)  # (N, 2, 2)
 
     pc_temp = pc[:, :, [0, 2]]  # (N, 512, 2)
 
@@ -63,7 +63,7 @@ def rotate_pc_along_y_torch(pc, rot_angle):
     return pc
 
 
-def boxes3d_to_corners3d(boxes3d, rotate = True):
+def boxes3d_to_corners3d(boxes3d, rotate=True):
     """
     :param boxes3d: (N, 7) [x, y, z, h, w, l, ry]
     :param rotate:
@@ -72,23 +72,23 @@ def boxes3d_to_corners3d(boxes3d, rotate = True):
     boxes_num = boxes3d.shape[0]
     h, w, l = boxes3d[:, 3], boxes3d[:, 4], boxes3d[:, 5]
     x_corners = np.array([l / 2., l / 2., -l / 2., -l / 2., l / 2., l / 2., -l / 2., -l / 2.],
-                         dtype = np.float32).T  # (N, 8)
+                         dtype=np.float32).T  # (N, 8)
     z_corners = np.array([w / 2., -w / 2., -w / 2., w / 2., w / 2., -w / 2., -w / 2., w / 2.],
-                         dtype = np.float32).T  # (N, 8)
+                         dtype=np.float32).T  # (N, 8)
 
-    y_corners = np.zeros((boxes_num, 8), dtype = np.float32)
-    y_corners[:, 4:8] = -h.reshape(boxes_num, 1).repeat(4, axis = 1)  # (N, 8)
+    y_corners = np.zeros((boxes_num, 8), dtype=np.float32)
+    y_corners[:, 4:8] = -h.reshape(boxes_num, 1).repeat(4, axis=1)  # (N, 8)
 
     if rotate:
         ry = boxes3d[:, 6]
-        zeros, ones = np.zeros(ry.size, dtype = np.float32), np.ones(ry.size, dtype = np.float32)
+        zeros, ones = np.zeros(ry.size, dtype=np.float32), np.ones(ry.size, dtype=np.float32)
         rot_list = np.array([[np.cos(ry), zeros, -np.sin(ry)],
                              [zeros, ones, zeros],
                              [np.sin(ry), zeros, np.cos(ry)]])  # (3, 3, N)
         R_list = np.transpose(rot_list, (2, 0, 1))  # (N, 3, 3)
 
         temp_corners = np.concatenate((x_corners.reshape(-1, 8, 1), y_corners.reshape(-1, 8, 1),
-                                       z_corners.reshape(-1, 8, 1)), axis = 2)  # (N, 8, 3)
+                                       z_corners.reshape(-1, 8, 1)), axis=2)  # (N, 8, 3)
         rotated_corners = np.matmul(temp_corners, R_list)  # (N, 8, 3)
         x_corners, y_corners, z_corners = rotated_corners[:, :, 0], rotated_corners[:, :, 1], rotated_corners[:, :, 2]
 
@@ -98,12 +98,12 @@ def boxes3d_to_corners3d(boxes3d, rotate = True):
     y = y_loc.reshape(-1, 1) + y_corners.reshape(-1, 8)
     z = z_loc.reshape(-1, 1) + z_corners.reshape(-1, 8)
 
-    corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis = 2)
+    corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis=2)
 
     return corners.astype(np.float32)
 
 
-def boxes3d_to_corners3d_torch(boxes3d, flip = False):
+def boxes3d_to_corners3d_torch(boxes3d, flip=False):
     """
     :param boxes3d: (N, 7) [x, y, z, h, w, l, ry]
     :return: corners_rotated: (N, 8, 3)
@@ -116,20 +116,20 @@ def boxes3d_to_corners3d_torch(boxes3d, flip = False):
     zeros = torch.cuda.FloatTensor(boxes_num, 1).fill_(0)
     ones = torch.cuda.FloatTensor(boxes_num, 1).fill_(1)
 
-    x_corners = torch.cat([l / 2., l / 2., -l / 2., -l / 2., l / 2., l / 2., -l / 2., -l / 2.], dim = 1)  # (N, 8)
-    y_corners = torch.cat([zeros, zeros, zeros, zeros, -h, -h, -h, -h], dim = 1)  # (N, 8)
-    z_corners = torch.cat([w / 2., -w / 2., -w / 2., w / 2., w / 2., -w / 2., -w / 2., w / 2.], dim = 1)  # (N, 8)
-    corners = torch.cat((x_corners.unsqueeze(dim = 1), y_corners.unsqueeze(dim = 1), z_corners.unsqueeze(dim = 1)),
-                        dim = 1)  # (N, 3, 8)
+    x_corners = torch.cat([l / 2., l / 2., -l / 2., -l / 2., l / 2., l / 2., -l / 2., -l / 2.], dim=1)  # (N, 8)
+    y_corners = torch.cat([zeros, zeros, zeros, zeros, -h, -h, -h, -h], dim=1)  # (N, 8)
+    z_corners = torch.cat([w / 2., -w / 2., -w / 2., w / 2., w / 2., -w / 2., -w / 2., w / 2.], dim=1)  # (N, 8)
+    corners = torch.cat((x_corners.unsqueeze(dim=1), y_corners.unsqueeze(dim=1), z_corners.unsqueeze(dim=1)),
+                        dim=1)  # (N, 3, 8)
 
     cosa, sina = torch.cos(ry), torch.sin(ry)
-    raw_1 = torch.cat([cosa, zeros, sina], dim = 1)
-    raw_2 = torch.cat([zeros, ones, zeros], dim = 1)
-    raw_3 = torch.cat([-sina, zeros, cosa], dim = 1)
-    R = torch.cat((raw_1.unsqueeze(dim = 1), raw_2.unsqueeze(dim = 1), raw_3.unsqueeze(dim = 1)), dim = 1)  # (N, 3, 3)
+    raw_1 = torch.cat([cosa, zeros, sina], dim=1)
+    raw_2 = torch.cat([zeros, ones, zeros], dim=1)
+    raw_3 = torch.cat([-sina, zeros, cosa], dim=1)
+    R = torch.cat((raw_1.unsqueeze(dim=1), raw_2.unsqueeze(dim=1), raw_3.unsqueeze(dim=1)), dim=1)  # (N, 3, 3)
 
     corners_rotated = torch.matmul(R, corners)  # (N, 3, 8)
-    corners_rotated = corners_rotated + centers.unsqueeze(dim = 2).expand(-1, -1, 8)
+    corners_rotated = corners_rotated + centers.unsqueeze(dim=2).expand(-1, -1, 8)
     corners_rotated = corners_rotated.permute(0, 2, 1)
     return corners_rotated
 
@@ -175,13 +175,13 @@ def in_hull(p, hull):
         flag = hull.find_simplex(p) >= 0
     except scipy.spatial.qhull.QhullError:
         print('Warning: not a hull %s' % str(hull))
-        flag = np.zeros(p.shape[0], dtype = np.bool)
+        flag = np.zeros(p.shape[0], dtype=np.bool)
 
     return flag
 
 
 def objs_to_boxes3d(obj_list):
-    boxes3d = np.zeros((obj_list.__len__(), 7), dtype = np.float32)
+    boxes3d = np.zeros((obj_list.__len__(), 7), dtype=np.float32)
     for k, obj in enumerate(obj_list):
         boxes3d[k, 0:3], boxes3d[k, 3], boxes3d[k, 4], boxes3d[k, 5], boxes3d[k, 6] \
             = obj.pos, obj.h, obj.w, obj.l, obj.ry
@@ -189,13 +189,13 @@ def objs_to_boxes3d(obj_list):
 
 
 def objs_to_scores(obj_list):
-    scores = np.zeros((obj_list.__len__()), dtype = np.float32)
+    scores = np.zeros((obj_list.__len__()), dtype=np.float32)
     for k, obj in enumerate(obj_list):
         scores[k] = obj.score
     return scores
 
 
-def get_iou3d(corners3d, query_corners3d, need_bev = False):
+def get_iou3d(corners3d, query_corners3d, need_bev=False):
     """	
     :param corners3d: (N, 8, 3) in rect coords	
     :param query_corners3d: (M, 8, 3)	
@@ -204,14 +204,14 @@ def get_iou3d(corners3d, query_corners3d, need_bev = False):
     from shapely.geometry import Polygon
     A, B = corners3d, query_corners3d
     N, M = A.shape[0], B.shape[0]
-    iou3d = np.zeros((N, M), dtype = np.float32)
-    iou_bev = np.zeros((N, M), dtype = np.float32)
+    iou3d = np.zeros((N, M), dtype=np.float32)
+    iou_bev = np.zeros((N, M), dtype=np.float32)
 
     # for height overlap, since y face down, use the negative y
-    min_h_a = -A[:, 0:4, 1].sum(axis = 1) / 4.0
-    max_h_a = -A[:, 4:8, 1].sum(axis = 1) / 4.0
-    min_h_b = -B[:, 0:4, 1].sum(axis = 1) / 4.0
-    max_h_b = -B[:, 4:8, 1].sum(axis = 1) / 4.0
+    min_h_a = -A[:, 0:4, 1].sum(axis=1) / 4.0
+    max_h_a = -A[:, 4:8, 1].sum(axis=1) / 4.0
+    min_h_b = -B[:, 0:4, 1].sum(axis=1) / 4.0
+    max_h_b = -B[:, 4:8, 1].sum(axis=1) / 4.0
 
     for i in range(N):
         for j in range(M):

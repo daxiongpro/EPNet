@@ -9,7 +9,7 @@ USE_INTENSITY = False
 
 
 class KittiDataset(torch_data.Dataset):
-    def __init__(self, root_dir, split = 'train', mode = 'TRAIN'):
+    def __init__(self, root_dir, split='train', mode='TRAIN'):
         self.split = split
         self.mode = mode
         self.classes = ['Car']
@@ -44,7 +44,7 @@ class KittiDataset(torch_data.Dataset):
     def get_lidar(self, idx):
         lidar_file = os.path.join(self.lidar_dir, '%06d.bin' % idx)
         assert os.path.exists(lidar_file)
-        return np.fromfile(lidar_file, dtype = np.float32).reshape(-1, 4)
+        return np.fromfile(lidar_file, dtype=np.float32).reshape(-1, 4)
 
     def get_calib(self, idx):
         calib_file = os.path.join(self.calib_dir, '%06d.txt' % idx)
@@ -103,29 +103,29 @@ class KittiDataset(torch_data.Dataset):
             pts_near_flag = pts_depth < 40.0
             far_idxs_choice = np.where(pts_near_flag == 0)[0]
             near_idxs = np.where(pts_near_flag == 1)[0]
-            near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace = False)
+            near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace=False)
 
-            choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis = 0) \
+            choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
                 if len(far_idxs_choice) > 0 else near_idxs_choice
             np.random.shuffle(choice)
         else:
-            choice = np.arange(0, len(pts_rect), dtype = np.int32)
+            choice = np.arange(0, len(pts_rect), dtype=np.int32)
             if self.npoints > len(pts_rect):
-                extra_choice = np.random.choice(choice, self.npoints - len(pts_rect), replace = False)
-                choice = np.concatenate((choice, extra_choice), axis = 0)
+                extra_choice = np.random.choice(choice, self.npoints - len(pts_rect), replace=False)
+                choice = np.concatenate((choice, extra_choice), axis=0)
             np.random.shuffle(choice)
 
         ret_pts_rect = pts_rect[choice, :]
         ret_pts_intensity = pts_intensity[choice] - 0.5  # translate intensity to [-0.5, 0.5]
 
         pts_features = [ret_pts_intensity.reshape(-1, 1)]
-        ret_pts_features = np.concatenate(pts_features, axis = 1) if pts_features.__len__() > 1 else pts_features[0]
+        ret_pts_features = np.concatenate(pts_features, axis=1) if pts_features.__len__() > 1 else pts_features[0]
 
-        sample_info = { 'sample_id': sample_id }
+        sample_info = {'sample_id': sample_id}
 
         if self.mode == 'TEST':
             if USE_INTENSITY:
-                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis = 1)  # (N, C)
+                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
             else:
                 pts_input = ret_pts_rect
             sample_info['pts_input'] = pts_input
@@ -139,7 +139,7 @@ class KittiDataset(torch_data.Dataset):
 
         # prepare input
         if USE_INTENSITY:
-            pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis = 1)  # (N, C)
+            pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
         else:
             pts_input = ret_pts_rect
 
@@ -152,10 +152,10 @@ class KittiDataset(torch_data.Dataset):
 
     @staticmethod
     def generate_training_labels(pts_rect, gt_boxes3d):
-        cls_label = np.zeros((pts_rect.shape[0]), dtype = np.int32)
-        gt_corners = kitti_utils.boxes3d_to_corners3d(gt_boxes3d, rotate = True)
-        extend_gt_boxes3d = kitti_utils.enlarge_box3d(gt_boxes3d, extra_width = 0.2)
-        extend_gt_corners = kitti_utils.boxes3d_to_corners3d(extend_gt_boxes3d, rotate = True)
+        cls_label = np.zeros((pts_rect.shape[0]), dtype=np.int32)
+        gt_corners = kitti_utils.boxes3d_to_corners3d(gt_boxes3d, rotate=True)
+        extend_gt_boxes3d = kitti_utils.enlarge_box3d(gt_boxes3d, extra_width=0.2)
+        extend_gt_corners = kitti_utils.boxes3d_to_corners3d(extend_gt_boxes3d, rotate=True)
         for k in range(gt_boxes3d.shape[0]):
             box_corners = gt_corners[k]
             fg_pt_flag = kitti_utils.in_hull(pts_rect, box_corners)
@@ -171,17 +171,17 @@ class KittiDataset(torch_data.Dataset):
 
     def collate_batch(self, batch):
         batch_size = batch.__len__()
-        ans_dict = { }
+        ans_dict = {}
 
         for key in batch[0].keys():
             if isinstance(batch[0][key], np.ndarray):
-                ans_dict[key] = np.concatenate([batch[k][key][np.newaxis, ...] for k in range(batch_size)], axis = 0)
+                ans_dict[key] = np.concatenate([batch[k][key][np.newaxis, ...] for k in range(batch_size)], axis=0)
 
             else:
                 ans_dict[key] = [batch[k][key] for k in range(batch_size)]
                 if isinstance(batch[0][key], int):
-                    ans_dict[key] = np.array(ans_dict[key], dtype = np.int32)
+                    ans_dict[key] = np.array(ans_dict[key], dtype=np.int32)
                 elif isinstance(batch[0][key], float):
-                    ans_dict[key] = np.array(ans_dict[key], dtype = np.float32)
+                    ans_dict[key] = np.array(ans_dict[key], dtype=np.float32)
 
         return ans_dict

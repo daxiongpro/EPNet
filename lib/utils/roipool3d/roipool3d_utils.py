@@ -4,7 +4,7 @@ import numpy as np
 import lib.utils.kitti_utils as kitti_utils
 
 
-def roipool3d_gpu(pts, pts_feature, boxes3d, pool_extra_width, sampled_pt_num = 512):
+def roipool3d_gpu(pts, pts_feature, boxes3d, pool_extra_width, sampled_pt_num=512):
     """
     :param pts: (B, N, 3)
     :param pts_feature: (B, N, C)
@@ -69,8 +69,8 @@ def roipool_pc_cpu(pts, pts_feature, boxes3d, sampled_pt_num):
     return pooled_pts, pooled_features, pooled_empty_flag
 
 
-def roipool3d_cpu(boxes3d, pts, pts_feature, pts_extra_input, pool_extra_width, sampled_pt_num = 512,
-                  canonical_transform = True):
+def roipool3d_cpu(boxes3d, pts, pts_feature, pts_extra_input, pool_extra_width, sampled_pt_num=512,
+                  canonical_transform=True):
     """
     :param boxes3d: (N, 7)
     :param pts: (N, 3)
@@ -82,7 +82,7 @@ def roipool3d_cpu(boxes3d, pts, pts_feature, pts_extra_input, pool_extra_width, 
     """
     pooled_boxes3d = kitti_utils.enlarge_box3d(boxes3d, pool_extra_width)
 
-    pts_feature_all = np.concatenate((pts_extra_input, pts_feature), axis = 1)
+    pts_feature_all = np.concatenate((pts_extra_input, pts_feature), axis=1)
 
     #  Note: if pooled_empty_flag[i] > 0, the pooled_pts[i], pooled_features[i] will be zero
     pooled_pts, pooled_features, pooled_empty_flag = \
@@ -90,7 +90,7 @@ def roipool3d_cpu(boxes3d, pts, pts_feature, pts_extra_input, pool_extra_width, 
                        torch.from_numpy(pooled_boxes3d), sampled_pt_num)
 
     extra_input_len = pts_extra_input.shape[1]
-    sampled_pts_input = torch.cat((pooled_pts, pooled_features[:, :, 0:extra_input_len]), dim = 2).numpy()
+    sampled_pts_input = torch.cat((pooled_pts, pooled_features[:, :, 0:extra_input_len]), dim=2).numpy()
     sampled_pts_feature = pooled_features[:, :, extra_input_len:].numpy()
 
     if canonical_transform:

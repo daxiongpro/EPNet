@@ -2,7 +2,7 @@ import numpy as np
 
 
 def cls_type_to_id(cls_type):
-    type_to_id = { 'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4 }
+    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
     if cls_type not in type_to_id.keys():
         return -1
     return type_to_id[cls_type]
@@ -17,11 +17,11 @@ class Object3d(object):
         self.trucation = float(label[1])
         self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
         self.alpha = float(label[3])
-        self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype = np.float32)
+        self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype=np.float32)
         self.h = float(label[8])
         self.w = float(label[9])
         self.l = float(label[10])
-        self.pos = np.array((float(label[11]), float(label[12]), float(label[13])), dtype = np.float32)
+        self.pos = np.array((float(label[11]), float(label[12]), float(label[13])), dtype=np.float32)
         self.dis_to_cam = np.linalg.norm(self.pos)
         self.ry = float(label[14])
         self.score = float(label[15]) if label.__len__() == 16 else -1.0
@@ -62,7 +62,7 @@ class Object3d(object):
         corners3d = corners3d + self.pos
         return corners3d
 
-    def to_bev_box2d(self, oblique = True, voxel_size = 0.1):
+    def to_bev_box2d(self, oblique=True, voxel_size=0.1):
         """
         :param bev_shape: (2) for bev shape (h, w), => (y_max, x_max) in image
         :param voxel_size: float, 0.1m
@@ -72,14 +72,14 @@ class Object3d(object):
         if oblique:
             corners3d = self.generate_corners3d()
             xz_corners = corners3d[0:4, [0, 2]]
-            box2d = np.zeros((4, 2), dtype = np.int32)
+            box2d = np.zeros((4, 2), dtype=np.int32)
             box2d[:, 0] = ((xz_corners[:, 0] - Object3d.MIN_XZ[0]) / voxel_size).astype(np.int32)
             box2d[:, 1] = Object3d.BEV_SHAPE[0] - 1 - ((xz_corners[:, 1] - Object3d.MIN_XZ[1]) / voxel_size).astype(
                 np.int32)
             box2d[:, 0] = np.clip(box2d[:, 0], 0, Object3d.BEV_SHAPE[1])
             box2d[:, 1] = np.clip(box2d[:, 1], 0, Object3d.BEV_SHAPE[0])
         else:
-            box2d = np.zeros(4, dtype = np.int32)
+            box2d = np.zeros(4, dtype=np.int32)
             # discrete_center = np.floor((self.pos / voxel_size)).astype(np.int32)
             cu = np.floor((self.pos[0] - Object3d.MIN_XZ[0]) / voxel_size).astype(np.int32)
             cv = Object3d.BEV_SHAPE[0] - 1 - ((self.pos[2] - Object3d.MIN_XZ[1]) / voxel_size).astype(np.int32)

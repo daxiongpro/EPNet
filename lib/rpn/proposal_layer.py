@@ -7,7 +7,7 @@ import lib.utils.iou3d.iou3d_utils as iou3d_utils
 
 
 class ProposalLayer(nn.Module):
-    def __init__(self, mode = 'TRAIN'):
+    def __init__(self, mode='TRAIN'):
         super().__init__()
         self.mode = mode
         self.MEAN_SIZE = torch.from_numpy(cfg.CLS_MEAN_SIZE[0]).cuda()
@@ -21,18 +21,18 @@ class ProposalLayer(nn.Module):
         """
         batch_size = xyz.shape[0]
         proposals = decode_bbox_target(xyz.view(-1, 3), rpn_reg.view(-1, rpn_reg.shape[-1]),
-                                       anchor_size = self.MEAN_SIZE,
-                                       loc_scope = cfg.RPN.LOC_SCOPE,
-                                       loc_bin_size = cfg.RPN.LOC_BIN_SIZE,
-                                       num_head_bin = cfg.RPN.NUM_HEAD_BIN,
-                                       get_xz_fine = cfg.RPN.LOC_XZ_FINE,
-                                       get_y_by_bin = False,
-                                       get_ry_fine = False)  # (N, 7)
+                                       anchor_size=self.MEAN_SIZE,
+                                       loc_scope=cfg.RPN.LOC_SCOPE,
+                                       loc_bin_size=cfg.RPN.LOC_BIN_SIZE,
+                                       num_head_bin=cfg.RPN.NUM_HEAD_BIN,
+                                       get_xz_fine=cfg.RPN.LOC_XZ_FINE,
+                                       get_y_by_bin=False,
+                                       get_ry_fine=False)  # (N, 7)
         proposals[:, 1] += proposals[:, 3] / 2  # set y as the center of bottom
         proposals = proposals.view(batch_size, -1, 7)
 
         scores = rpn_scores
-        _, sorted_idxs = torch.sort(scores, dim = 1, descending = True)
+        _, sorted_idxs = torch.sort(scores, dim=1, descending=True)
 
         batch_size = scores.size(0)
         ret_bbox3d = scores.new(batch_size, cfg[self.mode].RPN_POST_NMS_TOP_N, 7).zero_()
@@ -114,8 +114,8 @@ class ProposalLayer(nn.Module):
             scores_single_list.append(cur_scores[keep_idx])
             proposals_single_list.append(cur_proposals[keep_idx])
 
-        scores_single = torch.cat(scores_single_list, dim = 0)
-        proposals_single = torch.cat(proposals_single_list, dim = 0)
+        scores_single = torch.cat(scores_single_list, dim=0)
+        proposals_single = torch.cat(proposals_single_list, dim=0)
         return scores_single, proposals_single
 
     def score_based_proposal(self, scores, proposals, order):

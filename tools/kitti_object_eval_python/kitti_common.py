@@ -14,10 +14,10 @@ def get_image_index_str(img_idx):
 
 def get_kitti_info_path(idx,
                         prefix,
-                        info_type = 'image_2',
-                        file_tail = '.png',
-                        training = True,
-                        relative_path = True):
+                        info_type='image_2',
+                        file_tail='.png',
+                        training=True,
+                        relative_path=True):
     img_idx_str = get_image_index_str(idx)
     img_idx_str += file_tail
     prefix = pathlib.Path(prefix)
@@ -33,52 +33,52 @@ def get_kitti_info_path(idx,
         return str(prefix / file_path)
 
 
-def get_image_path(idx, prefix, training = True, relative_path = True):
+def get_image_path(idx, prefix, training=True, relative_path=True):
     return get_kitti_info_path(idx, prefix, 'image_2', '.png', training,
                                relative_path)
 
 
-def get_label_path(idx, prefix, training = True, relative_path = True):
+def get_label_path(idx, prefix, training=True, relative_path=True):
     return get_kitti_info_path(idx, prefix, 'label_2', '.txt', training,
                                relative_path)
 
 
-def get_velodyne_path(idx, prefix, training = True, relative_path = True):
+def get_velodyne_path(idx, prefix, training=True, relative_path=True):
     return get_kitti_info_path(idx, prefix, 'velodyne', '.bin', training,
                                relative_path)
 
 
-def get_calib_path(idx, prefix, training = True, relative_path = True):
+def get_calib_path(idx, prefix, training=True, relative_path=True):
     return get_kitti_info_path(idx, prefix, 'calib', '.txt', training,
                                relative_path)
 
 
 def _extend_matrix(mat):
-    mat = np.concatenate([mat, np.array([[0., 0., 0., 1.]])], axis = 0)
+    mat = np.concatenate([mat, np.array([[0., 0., 0., 1.]])], axis=0)
     return mat
 
 
 def get_kitti_image_info(path,
-                         training = True,
-                         label_info = True,
-                         velodyne = False,
-                         calib = False,
-                         image_ids = 7481,
-                         extend_matrix = True,
-                         num_worker = 8,
-                         relative_path = True,
-                         with_imageshape = True):
+                         training=True,
+                         label_info=True,
+                         velodyne=False,
+                         calib=False,
+                         image_ids=7481,
+                         extend_matrix=True,
+                         num_worker=8,
+                         relative_path=True,
+                         with_imageshape=True):
     # image_infos = []
     root_path = pathlib.Path(path)
     if not isinstance(image_ids, list):
         image_ids = list(range(image_ids))
 
     def map_func(idx):
-        image_info = { 'image_idx': idx }
+        image_info = {'image_idx': idx}
         annotations = None
         if velodyne:
             image_info['velodyne_path'] = get_velodyne_path(
-                    idx, path, training, relative_path)
+                idx, path, training, relative_path)
         image_info['img_path'] = get_image_path(idx, path, training,
                                                 relative_path)
         if with_imageshape:
@@ -86,7 +86,7 @@ def get_kitti_image_info(path,
             if relative_path:
                 img_path = str(root_path / img_path)
             image_info['img_shape'] = np.array(
-                    io.imread(img_path).shape[:2], dtype = np.int32)
+                io.imread(img_path).shape[:2], dtype=np.int32)
         if label_info:
             label_path = get_label_path(idx, path, training, relative_path)
             if relative_path:
@@ -94,21 +94,21 @@ def get_kitti_image_info(path,
             annotations = get_label_anno(label_path)
         if calib:
             calib_path = get_calib_path(
-                    idx, path, training, relative_path = False)
+                idx, path, training, relative_path=False)
             with open(calib_path, 'r') as f:
                 lines = f.readlines()
             P0 = np.array(
-                    [float(info) for info in lines[0].split(' ')[1:13]]).reshape(
-                    [3, 4])
+                [float(info) for info in lines[0].split(' ')[1:13]]).reshape(
+                [3, 4])
             P1 = np.array(
-                    [float(info) for info in lines[1].split(' ')[1:13]]).reshape(
-                    [3, 4])
+                [float(info) for info in lines[1].split(' ')[1:13]]).reshape(
+                [3, 4])
             P2 = np.array(
-                    [float(info) for info in lines[2].split(' ')[1:13]]).reshape(
-                    [3, 4])
+                [float(info) for info in lines[2].split(' ')[1:13]]).reshape(
+                [3, 4])
             P3 = np.array(
-                    [float(info) for info in lines[3].split(' ')[1:13]]).reshape(
-                    [3, 4])
+                [float(info) for info in lines[3].split(' ')[1:13]]).reshape(
+                [3, 4])
             if extend_matrix:
                 P0 = _extend_matrix(P0)
                 P1 = _extend_matrix(P1)
@@ -122,7 +122,7 @@ def get_kitti_image_info(path,
                 float(info) for info in lines[4].split(' ')[1:10]
             ]).reshape([3, 3])
             if extend_matrix:
-                rect_4x4 = np.zeros([4, 4], dtype = R0_rect.dtype)
+                rect_4x4 = np.zeros([4, 4], dtype=R0_rect.dtype)
                 rect_4x4[3, 3] = 1.
                 rect_4x4[:3, :3] = R0_rect
             else:
@@ -151,11 +151,11 @@ def get_kitti_image_info(path,
 
 def filter_kitti_anno(image_anno,
                       used_classes,
-                      used_difficulty = None,
-                      dontcare_iou = None):
+                      used_difficulty=None,
+                      dontcare_iou=None):
     if not isinstance(used_classes, (list, tuple)):
         used_classes = [used_classes]
-    img_filtered_annotations = { }
+    img_filtered_annotations = {}
     relevant_annotation_indices = [
         i for i, x in enumerate(image_anno['name']) if x in used_classes
     ]
@@ -182,7 +182,7 @@ def filter_kitti_anno(image_anno,
 
         # Remove all bounding boxes that overlap with a dontcare region.
         if ious.size > 0:
-            boxes_to_remove = np.amax(ious, axis = 1) > dontcare_iou
+            boxes_to_remove = np.amax(ious, axis=1) > dontcare_iou
             for key in image_anno.keys():
                 img_filtered_annotations[key] = (img_filtered_annotations[key][
                     np.logical_not(boxes_to_remove)])
@@ -192,7 +192,7 @@ def filter_kitti_anno(image_anno,
 def filter_annos_low_score(image_annos, thresh):
     new_image_annos = []
     for anno in image_annos:
-        img_filtered_annotations = { }
+        img_filtered_annotations = {}
         relevant_annotation_indices = [
             i for i, s in enumerate(anno['score']) if s >= thresh
         ]
@@ -203,7 +203,7 @@ def filter_annos_low_score(image_annos, thresh):
     return new_image_annos
 
 
-def kitti_result_line(result_dict, precision = 4):
+def kitti_result_line(result_dict, precision=4):
     prec_float = "{" + ":.{}f".format(precision) + "}"
     res_line = []
     all_field_default = OrderedDict([
@@ -244,7 +244,7 @@ def kitti_result_line(result_dict, precision = 4):
                 res_line += [prec_float.format(v) for v in val]
         else:
             raise ValueError("unknown key. supported key:{}".format(
-                    res_dict.keys()))
+                res_dict.keys()))
     return ' '.join(res_line)
 
 
@@ -264,9 +264,9 @@ def add_difficulty_to_annos(info):
     occlusion = annos['occluded']
     truncation = annos['truncated']
     diff = []
-    easy_mask = np.ones((len(dims),), dtype = np.bool)
-    moderate_mask = np.ones((len(dims),), dtype = np.bool)
-    hard_mask = np.ones((len(dims),), dtype = np.bool)
+    easy_mask = np.ones((len(dims),), dtype=np.bool)
+    moderate_mask = np.ones((len(dims),), dtype=np.bool)
+    hard_mask = np.ones((len(dims),), dtype=np.bool)
     i = 0
     for h, o, t in zip(height, occlusion, truncation):
         if o > max_occlusion[0] or h <= min_height[0] or t > max_trunc[0]:
@@ -294,15 +294,15 @@ def add_difficulty_to_annos(info):
 
 
 def get_label_anno(label_path):
-    annotations = { }
+    annotations = {}
     annotations.update({
-        'name'      : [],
-        'truncated' : [],
-        'occluded'  : [],
-        'alpha'     : [],
-        'bbox'      : [],
+        'name': [],
+        'truncated': [],
+        'occluded': [],
+        'alpha': [],
+        'bbox': [],
         'dimensions': [],
-        'location'  : [],
+        'location': [],
         'rotation_y': []
     })
     with open(label_path, 'r') as f:
@@ -316,15 +316,15 @@ def get_label_anno(label_path):
     annotations['occluded'] = np.array([int(x[2]) for x in content])
     annotations['alpha'] = np.array([float(x[3]) for x in content])
     annotations['bbox'] = np.array(
-            [[float(info) for info in x[4:8]] for x in content]).reshape(-1, 4)
+        [[float(info) for info in x[4:8]] for x in content]).reshape(-1, 4)
     # dimensions will convert hwl format to standard lhw(camera) format.
     annotations['dimensions'] = np.array(
-            [[float(info) for info in x[8:11]] for x in content]).reshape(
-            -1, 3)[:, [2, 0, 1]]
+        [[float(info) for info in x[8:11]] for x in content]).reshape(
+        -1, 3)[:, [2, 0, 1]]
     annotations['location'] = np.array(
-            [[float(info) for info in x[11:14]] for x in content]).reshape(-1, 3)
+        [[float(info) for info in x[11:14]] for x in content]).reshape(-1, 3)
     annotations['rotation_y'] = np.array(
-            [float(x[14]) for x in content]).reshape(-1)
+        [float(x[14]) for x in content]).reshape(-1)
     if len(content) != 0 and len(content[0]) == 16:  # have score
         annotations['score'] = np.array([float(x[15]) for x in content])
     else:
@@ -332,7 +332,7 @@ def get_label_anno(label_path):
     return annotations
 
 
-def get_label_annos(label_folder, image_ids = None):
+def get_label_annos(label_folder, image_ids=None):
     if image_ids is None:
         filepaths = pathlib.Path(label_folder).glob('*.txt')
         prog = re.compile(r'^\d{6}.txt$')
@@ -350,7 +350,7 @@ def get_label_annos(label_folder, image_ids = None):
     return annos
 
 
-def area(boxes, add1 = False):
+def area(boxes, add1=False):
     """Computes area of boxes.
 
     Args:
@@ -366,7 +366,7 @@ def area(boxes, add1 = False):
         return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
 
 
-def intersection(boxes1, boxes2, add1 = False):
+def intersection(boxes1, boxes2, add1=False):
     """Compute pairwise intersection areas between boxes.
 
     Args:
@@ -376,28 +376,28 @@ def intersection(boxes1, boxes2, add1 = False):
     Returns:
         a numpy array with shape [N*M] representing pairwise intersection area
     """
-    [y_min1, x_min1, y_max1, x_max1] = np.split(boxes1, 4, axis = 1)
-    [y_min2, x_min2, y_max2, x_max2] = np.split(boxes2, 4, axis = 1)
+    [y_min1, x_min1, y_max1, x_max1] = np.split(boxes1, 4, axis=1)
+    [y_min2, x_min2, y_max2, x_max2] = np.split(boxes2, 4, axis=1)
 
     all_pairs_min_ymax = np.minimum(y_max1, np.transpose(y_max2))
     all_pairs_max_ymin = np.maximum(y_min1, np.transpose(y_min2))
     if add1:
         all_pairs_min_ymax += 1.0
     intersect_heights = np.maximum(
-            np.zeros(all_pairs_max_ymin.shape),
-            all_pairs_min_ymax - all_pairs_max_ymin)
+        np.zeros(all_pairs_max_ymin.shape),
+        all_pairs_min_ymax - all_pairs_max_ymin)
 
     all_pairs_min_xmax = np.minimum(x_max1, np.transpose(x_max2))
     all_pairs_max_xmin = np.maximum(x_min1, np.transpose(x_min2))
     if add1:
         all_pairs_min_xmax += 1.0
     intersect_widths = np.maximum(
-            np.zeros(all_pairs_max_xmin.shape),
-            all_pairs_min_xmax - all_pairs_max_xmin)
+        np.zeros(all_pairs_max_xmin.shape),
+        all_pairs_min_xmax - all_pairs_max_xmin)
     return intersect_heights * intersect_widths
 
 
-def iou(boxes1, boxes2, add1 = False):
+def iou(boxes1, boxes2, add1=False):
     """Computes pairwise intersection-over-union between box collections.
 
     Args:
@@ -411,6 +411,6 @@ def iou(boxes1, boxes2, add1 = False):
     area1 = area(boxes1, add1)
     area2 = area(boxes2, add1)
     union = np.expand_dims(
-            area1, axis = 1) + np.expand_dims(
-            area2, axis = 0) - intersect
+        area1, axis=1) + np.expand_dims(
+        area2, axis=0) - intersect
     return intersect / union

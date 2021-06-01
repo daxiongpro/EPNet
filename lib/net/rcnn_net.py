@@ -72,7 +72,7 @@ class RCNNNet(nn.Module):
             if cfg.RCNN.DP_RATIO >= 0:
                 iou_branch.insert(1, nn.Dropout(cfg.RCNN.DP_RATIO))
             self.iou_branch = nn.Sequential(*iou_branch)
-            #pass
+            # pass
 
         # regression layer
         per_loc_bin_num = int(cfg.RCNN.LOC_SCOPE / cfg.RCNN.LOC_BIN_SIZE) * 2
@@ -150,8 +150,8 @@ class RCNNNet(nn.Module):
 
                 pts_feature = torch.cat((pts_extra_input, rpn_features), dim=2)
                 pooled_features, pooled_empty_flag = \
-                        roipool3d_utils.roipool3d_gpu(rpn_xyz, pts_feature, batch_rois, cfg.RCNN.POOL_EXTRA_WIDTH,
-                                                      sampled_pt_num=cfg.RCNN.NUM_POINTS)
+                    roipool3d_utils.roipool3d_gpu(rpn_xyz, pts_feature, batch_rois, cfg.RCNN.POOL_EXTRA_WIDTH,
+                                                  sampled_pt_num=cfg.RCNN.NUM_POINTS)
 
                 # canonical transformation
                 batch_size = batch_rois.shape[0]
@@ -174,7 +174,7 @@ class RCNNNet(nn.Module):
 
         xyz, features = self._break_up_pc(pts_input)
 
-        if cfg.RCNN.USE_RPN_FEATURES: ## True
+        if cfg.RCNN.USE_RPN_FEATURES:  ## True
             xyz_input = pts_input[..., 0:self.rcnn_input_channel].transpose(1, 2).unsqueeze(dim=3)
             xyz_feature = self.xyz_up_layer(xyz_input)
 

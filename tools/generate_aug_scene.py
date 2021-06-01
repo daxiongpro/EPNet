@@ -13,13 +13,13 @@ import argparse
 np.random.seed(1024)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--mode', type = str, default = 'generator')
-parser.add_argument('--class_name', type = str, default = 'Car')
-parser.add_argument('--save_dir', type = str, default = '../../data/KITTI/aug_scene/training')
-parser.add_argument('--split', type = str, default = 'train')
-parser.add_argument('--gt_database_dir', type = str, default = 'gt_database/train_gt_database_3level_Car.pkl')
-parser.add_argument('--include_similar', action = 'store_true', default = False)
-parser.add_argument('--aug_times', type = int, default = 4)
+parser.add_argument('--mode', type=str, default='generator')
+parser.add_argument('--class_name', type=str, default='Car')
+parser.add_argument('--save_dir', type=str, default='../../data/KITTI/aug_scene/training')
+parser.add_argument('--split', type=str, default='train')
+parser.add_argument('--gt_database_dir', type=str, default='gt_database/train_gt_database_3level_Car.pkl')
+parser.add_argument('--include_similar', action='store_true', default=False)
+parser.add_argument('--aug_times', type=int, default=4)
 args = parser.parse_args()
 
 PC_REDUCE_BY_RANGE = True
@@ -29,10 +29,10 @@ else:
     PC_AREA_SCOPE = np.array([[-30, 30], [-1, 3], [0, 50]])
 
 
-def log_print(info, fp = None):
+def log_print(info, fp=None):
     print(info)
     if fp is not None:
-        print(info, file = fp)
+        print(info, file=fp)
 
 
 def save_kitti_format(calib, bbox3d, obj_list, img_shape, save_fp):
@@ -61,12 +61,12 @@ def save_kitti_format(calib, bbox3d, obj_list, img_shape, save_fp):
                img_boxes[k, 1],
                img_boxes[k, 2], img_boxes[k, 3],
                bbox3d[k, 3], bbox3d[k, 4], bbox3d[k, 5], bbox3d[k, 0], bbox3d[k, 1], bbox3d[k, 2],
-               bbox3d[k, 6]), file = save_fp)
+               bbox3d[k, 6]), file=save_fp)
 
 
 class AugSceneGenerator(KittiDataset):
-    def __init__(self, root_dir, gt_database = None, split = 'train', classes = args.class_name):
-        super().__init__(root_dir, split = split)
+    def __init__(self, root_dir, gt_database=None, split='train', classes=args.class_name):
+        super().__init__(root_dir, split=split)
         self.gt_database = None
         if classes == 'Car':
             self.classes = ('Background', 'Car')
@@ -165,7 +165,7 @@ class AugSceneGenerator(KittiDataset):
         extra_gt_obj_list = []
         extra_gt_boxes3d_list = []
         new_pts_list, new_pts_intensity_list = [], []
-        src_pts_flag = np.ones(pts_rect.shape[0], dtype = np.int32)
+        src_pts_flag = np.ones(pts_rect.shape[0], dtype=np.int32)
 
         road_plane = self.get_road_plane(sample_id)
         a, b, c, d = road_plane
@@ -215,25 +215,25 @@ class AugSceneGenerator(KittiDataset):
             enlarged_box3d = new_gt_box3d.copy()
             enlarged_box3d[4] += 0.5
             enlarged_box3d[5] += 0.5  # enlarge new added box to avoid too nearby boxes
-            cur_gt_boxes3d = np.concatenate((cur_gt_boxes3d, enlarged_box3d.reshape(1, 7)), axis = 0)
+            cur_gt_boxes3d = np.concatenate((cur_gt_boxes3d, enlarged_box3d.reshape(1, 7)), axis=0)
             extra_gt_boxes3d_list.append(new_gt_box3d.reshape(1, 7))
             extra_gt_obj_list.append(new_gt_obj)
 
         if new_pts_list.__len__() == 0:
             return False, pts_rect, pts_intensity, None, None
 
-        extra_gt_boxes3d = np.concatenate(extra_gt_boxes3d_list, axis = 0)
+        extra_gt_boxes3d = np.concatenate(extra_gt_boxes3d_list, axis=0)
         # remove original points and add new points
         pts_rect = pts_rect[src_pts_flag == 1]
         pts_intensity = pts_intensity[src_pts_flag == 1]
-        new_pts_rect = np.concatenate(new_pts_list, axis = 0)
-        new_pts_intensity = np.concatenate(new_pts_intensity_list, axis = 0)
-        pts_rect = np.concatenate((pts_rect, new_pts_rect), axis = 0)
-        pts_intensity = np.concatenate((pts_intensity, new_pts_intensity), axis = 0)
+        new_pts_rect = np.concatenate(new_pts_list, axis=0)
+        new_pts_intensity = np.concatenate(new_pts_intensity_list, axis=0)
+        pts_rect = np.concatenate((pts_rect, new_pts_rect), axis=0)
+        pts_intensity = np.concatenate((pts_intensity, new_pts_intensity), axis=0)
 
         return True, pts_rect, pts_intensity, extra_gt_boxes3d, extra_gt_obj_list
 
-    def aug_one_epoch_scene(self, base_id, data_save_dir, label_save_dir, split_list, log_fp = None):
+    def aug_one_epoch_scene(self, base_id, data_save_dir, label_save_dir, split_list, log_fp=None):
         for idx, sample_id in enumerate(self.image_idx_list):
             sample_id = int(sample_id)
             print('process gt sample (%s, id=%06d)' % (args.split, sample_id))
@@ -250,7 +250,7 @@ class AugSceneGenerator(KittiDataset):
 
             # all labels for checking overlapping
             all_obj_list = self.filtrate_dc_objects(self.get_label(sample_id))
-            all_gt_boxes3d = np.zeros((all_obj_list.__len__(), 7), dtype = np.float32)
+            all_gt_boxes3d = np.zeros((all_obj_list.__len__(), 7), dtype=np.float32)
             for k, obj in enumerate(all_obj_list):
                 all_gt_boxes3d[k, 0:3], all_gt_boxes3d[k, 3], all_gt_boxes3d[k, 4], all_gt_boxes3d[k, 5], \
                 all_gt_boxes3d[k, 6] = obj.pos, obj.h, obj.w, obj.l, obj.ry
@@ -265,7 +265,7 @@ class AugSceneGenerator(KittiDataset):
                 self.aug_one_scene(sample_id, pts_rect, pts_intensity, all_gt_boxes3d)
 
             # save augment result to file
-            pts_info = np.concatenate((pts_rect, pts_intensity.reshape(-1, 1)), axis = 1)
+            pts_info = np.concatenate((pts_rect, pts_intensity.reshape(-1, 1)), axis=1)
             bin_file = os.path.join(data_save_dir, '%06d.bin' % (base_id + sample_id))
             pts_info.astype(np.float32).tofile(bin_file)
 
@@ -273,51 +273,51 @@ class AugSceneGenerator(KittiDataset):
             label_save_file = os.path.join(label_save_dir, '%06d.txt' % (base_id + sample_id))
             with open(label_save_file, 'w') as f:
                 for obj in obj_list:
-                    print(obj.to_kitti_format(), file = f)
+                    print(obj.to_kitti_format(), file=f)
 
                 if aug_flag:
                     # augment successfully
-                    save_kitti_format(calib, extra_gt_boxes3d, extra_gt_obj_list, img_shape = img_shape, save_fp = f)
+                    save_kitti_format(calib, extra_gt_boxes3d, extra_gt_obj_list, img_shape=img_shape, save_fp=f)
                 else:
-                    extra_gt_boxes3d = np.zeros((0, 7), dtype = np.float32)
-            log_print('Save to file (new_obj: %s): %s' % (extra_gt_boxes3d.__len__(), label_save_file), fp = log_fp)
+                    extra_gt_boxes3d = np.zeros((0, 7), dtype=np.float32)
+            log_print('Save to file (new_obj: %s): %s' % (extra_gt_boxes3d.__len__(), label_save_file), fp=log_fp)
             split_list.append('%06d' % (base_id + sample_id))
 
-    def generate_aug_scene(self, aug_times, log_fp = None):
+    def generate_aug_scene(self, aug_times, log_fp=None):
         data_save_dir = os.path.join(args.save_dir, 'rectified_data')
         label_save_dir = os.path.join(args.save_dir, 'aug_label')
-        os.makedirs(data_save_dir, exist_ok = True)
-        os.makedirs(label_save_dir, exist_ok = True)
+        os.makedirs(data_save_dir, exist_ok=True)
+        os.makedirs(label_save_dir, exist_ok=True)
 
         split_file = os.path.join(args.save_dir, '%s_aug.txt' % args.split)
         split_list = self.image_idx_list.copy()
         for epoch in range(aug_times):
             base_id = (epoch + 1) * 10000
-            self.aug_one_epoch_scene(base_id, data_save_dir, label_save_dir, split_list, log_fp = log_fp)
+            self.aug_one_epoch_scene(base_id, data_save_dir, label_save_dir, split_list, log_fp=log_fp)
 
         with open(split_file, 'w') as f:
             for idx, sample_id in enumerate(split_list):
-                print(sample_id, file = f, end = '')
+                print(sample_id, file=f, end='')
                 if idx != len(split_list) - 1:
-                    print('', file = f)
-        log_print('Save split file to %s' % split_file, fp = log_fp)
+                    print('', file=f)
+        log_print('Save split file to %s' % split_file, fp=log_fp)
         target_dir = '../../data/KITTI/ImageSets/'
         os.system('cp %s %s' % (split_file, target_dir))
-        log_print('Copy split file from %s to %s' % (split_file, target_dir), fp = log_fp)
+        log_print('Copy split file from %s to %s' % (split_file, target_dir), fp=log_fp)
 
 
 if __name__ == '__main__':
-    os.makedirs(args.save_dir, exist_ok = True)
+    os.makedirs(args.save_dir, exist_ok=True)
     info_file = os.path.join(args.save_dir, 'log_info.txt')
 
     if args.mode == 'generator':
         log_fp = open(info_file, 'w')
 
         gt_database = pickle.load(open(args.gt_database_dir, 'rb'))
-        log_print('Loading gt_database(%d) from %s' % (gt_database.__len__(), args.gt_database_dir), fp = log_fp)
+        log_print('Loading gt_database(%d) from %s' % (gt_database.__len__(), args.gt_database_dir), fp=log_fp)
 
-        dataset = AugSceneGenerator(root_dir = '../../data', gt_database = gt_database, split = args.split)
-        dataset.generate_aug_scene(aug_times = args.aug_times, log_fp = log_fp)
+        dataset = AugSceneGenerator(root_dir='../../data', gt_database=gt_database, split=args.split)
+        dataset.generate_aug_scene(aug_times=args.aug_times, log_fp=log_fp)
 
         log_fp.close()
 

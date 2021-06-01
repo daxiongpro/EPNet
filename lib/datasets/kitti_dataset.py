@@ -7,7 +7,7 @@ from PIL import Image
 
 
 class KittiDataset(torch_data.Dataset):
-    def __init__(self, root_dir, split = 'train'):
+    def __init__(self, root_dir, split='train'):
         self.split = split
         is_test = self.split == 'test'
         self.imageset_dir = os.path.join(root_dir, 'KITTI', 'object', 'testing' if is_test else 'training')
@@ -47,16 +47,16 @@ class KittiDataset(torch_data.Dataset):
         im = im / 255.0
         im -= self.mean
         im /= self.std
-        #print(im.shape)
+        # print(im.shape)
         # ~[-2,2]
         # im = im[:, :, ::-1]
         # make same size padding with 0
-        imback = np.zeros([384, 1280, 3], dtype = np.float)
+        imback = np.zeros([384, 1280, 3], dtype=np.float)
         imback[:im.shape[0], :im.shape[1], :] = im
 
         return imback  # (H,W,3) RGB mode
 
-    def get_image_shape_with_padding(self, idx = 0):
+    def get_image_shape_with_padding(self, idx=0):
         return 384, 1280, 3
 
     def get_image_shape(self, idx):
@@ -69,7 +69,7 @@ class KittiDataset(torch_data.Dataset):
     def get_lidar(self, idx):
         lidar_file = os.path.join(self.lidar_dir, '%06d.bin' % idx)
         assert os.path.exists(lidar_file)
-        return np.fromfile(lidar_file, dtype = np.float32).reshape(-1, 4)
+        return np.fromfile(lidar_file, dtype=np.float32).reshape(-1, 4)
 
     def get_calib(self, idx):
         calib_file = os.path.join(self.calib_dir, '%06d.txt' % idx)

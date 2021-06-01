@@ -14,9 +14,9 @@ import argparse
 from lib.datasets.kitti_rcnn_dataset import interpolate_img_by_xy
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--save_dir', type = str, default = './gt_database')
-parser.add_argument('--class_name', type = str, default = 'Car')
-parser.add_argument('--split', type = str, default = 'train')
+parser.add_argument('--save_dir', type=str, default='./gt_database')
+parser.add_argument('--class_name', type=str, default='Car')
+parser.add_argument('--split', type=str, default='train')
 args = parser.parse_args()
 
 import cv2
@@ -24,8 +24,8 @@ from lib.config import cfg
 
 
 class GTDatabaseGenerator(KittiDataset):
-    def __init__(self, root_dir, split = 'train', classes = args.class_name):
-        super().__init__(root_dir, split = split)
+    def __init__(self, root_dir, split='train', classes=args.class_name):
+        super().__init__(root_dir, split=split)
         self.gt_database = None
         if classes == 'Car':
             self.classes = ('Background', 'Car')
@@ -39,7 +39,7 @@ class GTDatabaseGenerator(KittiDataset):
             assert False, "Invalid classes: %s" % classes
         self.velodyne_rgb_dir = os.path.join(root_dir, 'KITTI/object/training/velodyne_rgb')
         # if not os.path.exists(self.velodyne_rgb_dir):
-        os.makedirs(self.velodyne_rgb_dir, exist_ok = True)
+        os.makedirs(self.velodyne_rgb_dir, exist_ok=True)
 
     def __len__(self):
         raise NotImplementedError
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     #
     # dataset.generate_rgb_database()
     # # args.split=
-    dataset = GTDatabaseGenerator(root_dir = '../../data/', split = 'train')
+    dataset = GTDatabaseGenerator(root_dir='../../data/', split='train')
     dataset.vis_img()
 
     # gt_database = pickle.load(open('gt_database/train_gt_database.pkl', 'rb'))

@@ -14,9 +14,9 @@ def _read_imageset_file(path):
 def evaluate(label_path,
              result_path,
              label_split_file,
-             current_class = 0,
-             coco = False,
-             score_thresh = -1):
+             current_class=0,
+             coco=False,
+             score_thresh=-1):
     dt_annos = kitti.get_label_annos(result_path)
     if score_thresh > 0:
         dt_annos = kitti.filter_annos_low_score(dt_annos, score_thresh)

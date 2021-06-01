@@ -4,8 +4,8 @@ from pointnet2.pointnet2_modules import PointnetFPModule, PointnetSAModuleMSG
 import pointnet2.pytorch_utils as pt_utils
 
 
-def get_model(input_channels = 0):
-    return Pointnet2MSG(input_channels = input_channels)
+def get_model(input_channels=0):
+    return Pointnet2MSG(input_channels=input_channels)
 
 
 NPOINTS = [4096, 1024, 256, 64]
@@ -19,7 +19,7 @@ DP_RATIO = 0.5
 
 
 class Pointnet2MSG(nn.Module):
-    def __init__(self, input_channels = 6):
+    def __init__(self, input_channels=6):
         super().__init__()
 
         self.SA_modules = nn.ModuleList()
@@ -34,14 +34,14 @@ class Pointnet2MSG(nn.Module):
                 channel_out += mlps[idx][-1]
 
             self.SA_modules.append(
-                    PointnetSAModuleMSG(
-                            npoint = NPOINTS[k],
-                            radii = RADIUS[k],
-                            nsamples = NSAMPLE[k],
-                            mlps = mlps,
-                            use_xyz = True,
-                            bn = True
-                    )
+                PointnetSAModuleMSG(
+                    npoint=NPOINTS[k],
+                    radii=RADIUS[k],
+                    nsamples=NSAMPLE[k],
+                    mlps=mlps,
+                    use_xyz=True,
+                    bn=True
+                )
             )
             skip_channel_list.append(channel_out)
             channel_in = channel_out
@@ -51,15 +51,15 @@ class Pointnet2MSG(nn.Module):
         for k in range(FP_MLPS.__len__()):
             pre_channel = FP_MLPS[k + 1][-1] if k + 1 < len(FP_MLPS) else channel_out
             self.FP_modules.append(
-                    PointnetFPModule(mlp = [pre_channel + skip_channel_list[k]] + FP_MLPS[k])
+                PointnetFPModule(mlp=[pre_channel + skip_channel_list[k]] + FP_MLPS[k])
             )
 
         cls_layers = []
         pre_channel = FP_MLPS[0][-1]
         for k in range(0, CLS_FC.__len__()):
-            cls_layers.append(pt_utils.Conv1d(pre_channel, CLS_FC[k], bn = True))
+            cls_layers.append(pt_utils.Conv1d(pre_channel, CLS_FC[k], bn=True))
             pre_channel = CLS_FC[k]
-        cls_layers.append(pt_utils.Conv1d(pre_channel, 1, activation = None))
+        cls_layers.append(pt_utils.Conv1d(pre_channel, 1, activation=None))
         cls_layers.insert(1, nn.Dropout(0.5))
         self.cls_layer = nn.Sequential(*cls_layers)
 
@@ -83,7 +83,7 @@ class Pointnet2MSG(nn.Module):
 
         for i in range(-1, -(len(self.FP_modules) + 1), -1):
             l_features[i - 1] = self.FP_modules[i](
-                    l_xyz[i - 1], l_xyz[i], l_features[i - 1], l_features[i]
+                l_xyz[i - 1], l_xyz[i], l_features[i - 1], l_features[i]
             )
 
         pred_cls = self.cls_layer(l_features[0]).transpose(1, 2).contiguous()  # (B, N, 1)

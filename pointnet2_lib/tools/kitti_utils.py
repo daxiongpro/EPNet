@@ -4,7 +4,7 @@ import scipy
 
 
 def cls_type_to_id(cls_type):
-    type_to_id = { 'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4 }
+    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
     if cls_type not in type_to_id.keys():
         return -1
     return type_to_id[cls_type]
@@ -19,11 +19,11 @@ class Object3d(object):
         self.trucation = float(label[1])
         self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
         self.alpha = float(label[3])
-        self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype = np.float32)
+        self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype=np.float32)
         self.h = float(label[8])
         self.w = float(label[9])
         self.l = float(label[10])
-        self.pos = np.array((float(label[11]), float(label[12]), float(label[13])), dtype = np.float32)
+        self.pos = np.array((float(label[11]), float(label[12]), float(label[13])), dtype=np.float32)
         self.dis_to_cam = np.linalg.norm(self.pos)
         self.ry = float(label[14])
         self.score = float(label[15]) if label.__len__() == 16 else -1.0
@@ -83,18 +83,18 @@ def get_calib_from_file(calib_file):
         lines = f.readlines()
 
     obj = lines[2].strip().split(' ')[1:]
-    P2 = np.array(obj, dtype = np.float32)
+    P2 = np.array(obj, dtype=np.float32)
     obj = lines[3].strip().split(' ')[1:]
-    P3 = np.array(obj, dtype = np.float32)
+    P3 = np.array(obj, dtype=np.float32)
     obj = lines[4].strip().split(' ')[1:]
-    R0 = np.array(obj, dtype = np.float32)
+    R0 = np.array(obj, dtype=np.float32)
     obj = lines[5].strip().split(' ')[1:]
-    Tr_velo_to_cam = np.array(obj, dtype = np.float32)
+    Tr_velo_to_cam = np.array(obj, dtype=np.float32)
 
-    return { 'P2'         : P2.reshape(3, 4),
-             'P3'         : P3.reshape(3, 4),
-             'R0'         : R0.reshape(3, 3),
-             'Tr_velo2cam': Tr_velo_to_cam.reshape(3, 4) }
+    return {'P2': P2.reshape(3, 4),
+            'P3': P3.reshape(3, 4),
+            'R0': R0.reshape(3, 3),
+            'Tr_velo2cam': Tr_velo_to_cam.reshape(3, 4)}
 
 
 class Calibration(object):
@@ -113,7 +113,7 @@ class Calibration(object):
         :param pts: (N, 3 or 2)
         :return pts_hom: (N, 4 or 3)
         """
-        pts_hom = np.hstack((pts, np.ones((pts.shape[0], 1), dtype = np.float32)))
+        pts_hom = np.hstack((pts, np.ones((pts.shape[0], 1), dtype=np.float32)))
         return pts_hom
 
     def lidar_to_rect(self, pts_lidar):
@@ -154,14 +154,14 @@ def get_objects_from_label(label_file):
 
 
 def objs_to_boxes3d(obj_list):
-    boxes3d = np.zeros((obj_list.__len__(), 7), dtype = np.float32)
+    boxes3d = np.zeros((obj_list.__len__(), 7), dtype=np.float32)
     for k, obj in enumerate(obj_list):
         boxes3d[k, 0:3], boxes3d[k, 3], boxes3d[k, 4], boxes3d[k, 5], boxes3d[k, 6] \
             = obj.pos, obj.h, obj.w, obj.l, obj.ry
     return boxes3d
 
 
-def boxes3d_to_corners3d(boxes3d, rotate = True):
+def boxes3d_to_corners3d(boxes3d, rotate=True):
     """
     :param boxes3d: (N, 7) [x, y, z, h, w, l, ry]
     :param rotate:
@@ -170,23 +170,23 @@ def boxes3d_to_corners3d(boxes3d, rotate = True):
     boxes_num = boxes3d.shape[0]
     h, w, l = boxes3d[:, 3], boxes3d[:, 4], boxes3d[:, 5]
     x_corners = np.array([l / 2., l / 2., -l / 2., -l / 2., l / 2., l / 2., -l / 2., -l / 2.],
-                         dtype = np.float32).T  # (N, 8)
+                         dtype=np.float32).T  # (N, 8)
     z_corners = np.array([w / 2., -w / 2., -w / 2., w / 2., w / 2., -w / 2., -w / 2., w / 2.],
-                         dtype = np.float32).T  # (N, 8)
+                         dtype=np.float32).T  # (N, 8)
 
-    y_corners = np.zeros((boxes_num, 8), dtype = np.float32)
-    y_corners[:, 4:8] = -h.reshape(boxes_num, 1).repeat(4, axis = 1)  # (N, 8)
+    y_corners = np.zeros((boxes_num, 8), dtype=np.float32)
+    y_corners[:, 4:8] = -h.reshape(boxes_num, 1).repeat(4, axis=1)  # (N, 8)
 
     if rotate:
         ry = boxes3d[:, 6]
-        zeros, ones = np.zeros(ry.size, dtype = np.float32), np.ones(ry.size, dtype = np.float32)
+        zeros, ones = np.zeros(ry.size, dtype=np.float32), np.ones(ry.size, dtype=np.float32)
         rot_list = np.array([[np.cos(ry), zeros, -np.sin(ry)],
                              [zeros, ones, zeros],
                              [np.sin(ry), zeros, np.cos(ry)]])  # (3, 3, N)
         R_list = np.transpose(rot_list, (2, 0, 1))  # (N, 3, 3)
 
         temp_corners = np.concatenate((x_corners.reshape(-1, 8, 1), y_corners.reshape(-1, 8, 1),
-                                       z_corners.reshape(-1, 8, 1)), axis = 2)  # (N, 8, 3)
+                                       z_corners.reshape(-1, 8, 1)), axis=2)  # (N, 8, 3)
         rotated_corners = np.matmul(temp_corners, R_list)  # (N, 8, 3)
         x_corners, y_corners, z_corners = rotated_corners[:, :, 0], rotated_corners[:, :, 1], rotated_corners[:, :, 2]
 
@@ -196,7 +196,7 @@ def boxes3d_to_corners3d(boxes3d, rotate = True):
     y = y_loc.reshape(-1, 1) + y_corners.reshape(-1, 8)
     z = z_loc.reshape(-1, 1) + z_corners.reshape(-1, 8)
 
-    corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis = 2)
+    corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis=2)
 
     return corners.astype(np.float32)
 
@@ -226,6 +226,6 @@ def in_hull(p, hull):
         flag = hull.find_simplex(p) >= 0
     except scipy.spatial.qhull.QhullError:
         print('Warning: not a hull %s' % str(hull))
-        flag = np.zeros(p.shape[0], dtype = np.bool)
+        flag = np.zeros(p.shape[0], dtype=np.bool)
 
     return flag

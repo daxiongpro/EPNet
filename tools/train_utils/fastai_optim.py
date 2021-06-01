@@ -33,7 +33,7 @@ def get_master(layer_groups, flat_master: bool = False):
         for lg in model_params:
             if len(lg) != 0:
                 mp = parameters_to_vector([param.data.float() for param in lg])
-                mp = torch.nn.Parameter(mp, requires_grad = True)
+                mp = torch.nn.Parameter(mp, requires_grad=True)
                 if mp.grad is None: mp.grad = mp.new(*mp.size())
                 master_params.append([mp])
             else:
@@ -74,7 +74,7 @@ def master2model(model_params, master_params, flat_master: bool = False) -> None
             for model, master in zip(model_group, master_group): model.data.copy_(master.data)
 
 
-def listify(p = None, q = None):
+def listify(p=None, q=None):
     "Make `p` listy and the same length as `q`."
     if p is None:
         p = []
@@ -113,7 +113,7 @@ class OptimWrapper():
                layer_groups, **kwargs):
         "Create an `optim.Optimizer` from `opt_func` with `lr`. Set lr on `layer_groups`."
         split_groups = split_bn_bias(layer_groups)
-        opt = opt_func([{ 'params': trainable_params(l), 'lr': 0 } for l in split_groups])
+        opt = opt_func([{'params': trainable_params(l), 'lr': 0} for l in split_groups])
         opt = cls(opt, **kwargs)
         opt.lr, opt.opt_func = listify(lr, layer_groups), opt_func
         return opt
@@ -122,8 +122,8 @@ class OptimWrapper():
         "Create a new `OptimWrapper` from `self` with another `layer_groups` but the same hyper-parameters."
         opt_func = getattr(self, 'opt_func', self.opt.__class__)
         split_groups = split_bn_bias(layer_groups)
-        opt = opt_func([{ 'params': trainable_params(l), 'lr': 0 } for l in split_groups])
-        return self.create(opt_func, self.lr, layer_groups, wd = self.wd, true_wd = self.true_wd, bn_wd = self.bn_wd)
+        opt = opt_func([{'params': trainable_params(l), 'lr': 0} for l in split_groups])
+        return self.create(opt_func, self.lr, layer_groups, wd=self.wd, true_wd=self.true_wd, bn_wd=self.bn_wd)
 
     def __repr__(self) -> str:
         return f'OptimWrapper over {repr(self.opt)}.\nTrue weight decay: {self.true_wd}'
@@ -159,7 +159,7 @@ class OptimWrapper():
     def clear(self):
         "Reset the state of the inner optimizer."
         sd = self.state_dict()
-        sd['state'] = { }
+        sd['state'] = {}
         self.load_state_dict(sd)
 
     # Hyperparameters as properties
@@ -204,7 +204,7 @@ class OptimWrapper():
     @wd.setter
     def wd(self, val: float) -> None:
         "Set weight decay."
-        if not self.true_wd: self.set_val('weight_decay', listify(val, self._wd), bn_groups = self.bn_wd)
+        if not self.true_wd: self.set_val('weight_decay', listify(val, self._wd), bn_groups=self.bn_wd)
         self._wd = listify(val, self._wd)
 
     # Helper functions
@@ -235,7 +235,7 @@ class OptimWrapper():
 class FastAIMixedOptim(OptimWrapper):
     @classmethod
     def create(cls, opt_func, lr,
-               layer_groups, model, flat_master = False, loss_scale = 512.0, **kwargs):
+               layer_groups, model, flat_master=False, loss_scale=512.0, **kwargs):
         "Create an `optim.Optimizer` from `opt_func` with `lr`. Set lr on `layer_groups`."
         opt = OptimWrapper.create(opt_func, lr, layer_groups, **kwargs)
         opt.model_params, opt.master_params = get_master(layer_groups, flat_master)
@@ -246,7 +246,7 @@ class FastAIMixedOptim(OptimWrapper):
         # opt = self.learn.opt
         mom, wd, beta = opt.mom, opt.wd, opt.beta
         lrs = [lr for lr in opt._lr for _ in range(2)]
-        opt_params = [{ 'params': mp, 'lr': lr } for mp, lr in zip(opt.master_params, lrs)]
+        opt_params = [{'params': mp, 'lr': lr} for mp, lr in zip(opt.master_params, lrs)]
         opt.opt = opt_func(opt_params)
         opt.mom, opt.wd, opt.beta = mom, wd, beta
         return opt

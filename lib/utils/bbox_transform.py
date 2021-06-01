@@ -3,6 +3,7 @@ import numpy as np
 from lib.config import cfg
 import torch.nn.functional as F
 
+
 def rotate_pc_along_y_torch(pc, rot_angle):
     """
     :param pc: (N, 3 + C)
@@ -76,14 +77,14 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
         z_bin_l, z_bin_r = per_loc_bin_num, per_loc_bin_num * 2
         start_offset = z_bin_r
 
-        pred_x_bin = F.softmax(pred_reg[:, x_bin_l: x_bin_r], 1) # N x num_bin
+        pred_x_bin = F.softmax(pred_reg[:, x_bin_l: x_bin_r], 1)  # N x num_bin
         pred_z_bin = F.softmax(pred_reg[:, z_bin_l: z_bin_r], 1)
 
         # print(pred_x_bin[:10, :])
         # input()
 
         xz_bin_ind = torch.arange(per_loc_bin_num).float()
-        xz_bin_center = xz_bin_ind * loc_bin_size + loc_bin_size / 2 - loc_scope # num_bin
+        xz_bin_center = xz_bin_ind * loc_bin_size + loc_bin_size / 2 - loc_scope  # num_bin
         xz_bin_center = xz_bin_center.to(pred_x_bin.device)
 
         pred_x_abs = xz_bin_center
@@ -95,7 +96,7 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
             z_res_l, z_res_r = per_loc_bin_num * 3, per_loc_bin_num * 4
             start_offset = z_res_r
 
-            pred_x_reg = pred_reg[:, x_res_l: x_res_r] * loc_bin_size # N x num_bin
+            pred_x_reg = pred_reg[:, x_res_l: x_res_r] * loc_bin_size  # N x num_bin
             pred_z_reg = pred_reg[:, z_res_l: z_res_r] * loc_bin_size
 
             pred_x_abs = pred_x_abs + pred_x_reg
@@ -103,7 +104,6 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
 
         pos_x = (pred_x_abs * pred_x_bin).sum(dim=1)
         pos_z = (pred_z_abs * pred_z_bin).sum(dim=1)
-
 
     # recover y localization
     if get_y_by_bin:
@@ -160,22 +160,22 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
 
             # [way2]
             ry_bin_r = ry_bin.clone()
-            ry_bin_r[ry<0] = 0 # [0, pi/4]
-            p_rside = ry_bin_r.sum(dim=1, keepdim=True) + 1e-7 # B
-            ry_bin_r =ry_bin_r/p_rside
+            ry_bin_r[ry < 0] = 0  # [0, pi/4]
+            p_rside = ry_bin_r.sum(dim=1, keepdim=True) + 1e-7  # B
+            ry_bin_r = ry_bin_r / p_rside
 
             ry_bin_l = ry_bin.clone()
-            ry_bin_l[ry>=0] = 0 #[-pi/4, 0]
+            ry_bin_l[ry >= 0] = 0  # [-pi/4, 0]
             p_lside = ry_bin_l.sum(dim=1, keepdim=True) + 1e-7
-            ry_bin_l =ry_bin_l/p_lside
+            ry_bin_l = ry_bin_l / p_lside
 
             # assert 1 - (p_rside + p_lside) < p_lside.new().resize_(p_lside.size()).fill_(1e-4)
             ry_r = ry.clone()
-            ry_r[ry_r<0] = 0
+            ry_r[ry_r < 0] = 0
             ry_r = (ry_r * ry_bin_r).sum(dim=1)
 
             ry_l = ry.clone()
-            ry_l[ry_l>=0] = 0
+            ry_l[ry_l >= 0] = 0
             ry_l = (ry_l * ry_bin_l).sum(dim=1)
 
             # flags
@@ -190,7 +190,7 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
             # bin_center is (0, 30, 60, 90, 120, ..., 270, 300, 330)
             # ry = (ry_bin.float() * angle_per_class + ry_res) % (2 * np.pi)
             ry_bin_ind = torch.arange(num_head_bin).float().to(ry_res_norm.device)
-            ry = (ry_bin_ind * angle_per_class + ry_res) % (2*np.pi)
+            ry = (ry_bin_ind * angle_per_class + ry_res) % (2 * np.pi)
 
             # [way1] to [0, pi]
             # ry[ry > np.pi] -= np.pi
@@ -199,23 +199,23 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
 
             # [way2] ry [0, 2pi]
             ry_bin_r = ry_bin.clone()
-            ry_bin_r[ry > np.pi] = 0 # [0, pi]
-            p_rside = ry_bin_r.sum(dim=1, keepdim=True) + 1e-7 # B
-            ry_bin_r =ry_bin_r/p_rside
+            ry_bin_r[ry > np.pi] = 0  # [0, pi]
+            p_rside = ry_bin_r.sum(dim=1, keepdim=True) + 1e-7  # B
+            ry_bin_r = ry_bin_r / p_rside
 
             ry_bin_l = ry_bin.clone()
-            ry_bin_l[ry <= np.pi] = 0 # (pi, 2*pi]
+            ry_bin_l[ry <= np.pi] = 0  # (pi, 2*pi]
             p_lside = ry_bin_l.sum(dim=1, keepdim=True) + 1e-7
-            ry_bin_l =ry_bin_l/p_lside
+            ry_bin_l = ry_bin_l / p_lside
 
             ry_r = ry.clone()
             ry_r[ry_r > np.pi] = 0
-            ry_r = (ry_r * ry_bin_r).sum(dim=1) # [0, pi]
+            ry_r = (ry_r * ry_bin_r).sum(dim=1)  # [0, pi]
             # print('ry_r', ry_r.size())
 
             ry_l = ry.clone()
             ry_l[ry_l <= np.pi] = 0
-            ry_l = (ry_l * ry_bin_l).sum(dim=1) # (pi, 2*pi]
+            ry_l = (ry_l * ry_bin_l).sum(dim=1)  # (pi, 2*pi]
             # print('ry_l', ry_l.size())
 
             # flags
@@ -235,10 +235,9 @@ def decode_bbox_target(roi_box3d, pred_reg, loc_scope, loc_bin_size, num_head_bi
             #     ws_l = ry_bin[ry>np.pi]/ry_bin[ry>np.pi].sum(dim=1, keepdim=True)
             #     ry_l = ry[ry>np.pi]
             #     ry = (ry_l * ws_l).sum(dim=1) # [np.pi, 2*np.pi]
-            ry[ry>np.pi] -= 2*np.pi
+            ry[ry > np.pi] -= 2 * np.pi
 
             # print(ry.size())
-
 
     # recover size
     size_res_l, size_res_r = ry_res_r, ry_res_r + 3

@@ -18,26 +18,26 @@ class ProposalTargetLayer(nn.Module):
 
         rpn_xyz, rpn_features = input_dict['rpn_xyz'], input_dict['rpn_features']
         if cfg.RCNN.USE_INTENSITY:
-            pts_extra_input_list = [input_dict['rpn_intensity'].unsqueeze(dim = 2),
-                                    input_dict['seg_mask'].unsqueeze(dim = 2)]
+            pts_extra_input_list = [input_dict['rpn_intensity'].unsqueeze(dim=2),
+                                    input_dict['seg_mask'].unsqueeze(dim=2)]
         else:
-            pts_extra_input_list = [input_dict['seg_mask'].unsqueeze(dim = 2)]
+            pts_extra_input_list = [input_dict['seg_mask'].unsqueeze(dim=2)]
 
         if cfg.RCNN.USE_DEPTH:
             pts_depth = input_dict['pts_depth'] / 70.0 - 0.5
-            pts_extra_input_list.append(pts_depth.unsqueeze(dim = 2))
+            pts_extra_input_list.append(pts_depth.unsqueeze(dim=2))
 
         if cfg.RCNN.USE_RGB:
-            pts_rgb=input_dict['pts_rgb']
+            pts_rgb = input_dict['pts_rgb']
             pts_extra_input_list.append(pts_rgb)
 
-        pts_extra_input = torch.cat(pts_extra_input_list, dim = 2)
+        pts_extra_input = torch.cat(pts_extra_input_list, dim=2)
 
         # point cloud pooling
-        pts_feature = torch.cat((pts_extra_input, rpn_features), dim = 2)
+        pts_feature = torch.cat((pts_extra_input, rpn_features), dim=2)
         pooled_features, pooled_empty_flag = \
             roipool3d_utils.roipool3d_gpu(rpn_xyz, pts_feature, batch_rois, cfg.RCNN.POOL_EXTRA_WIDTH,
-                                          sampled_pt_num = cfg.RCNN.NUM_POINTS)
+                                          sampled_pt_num=cfg.RCNN.NUM_POINTS)
 
         sampled_pts, sampled_features = pooled_features[:, :, :, 0:3], pooled_features[:, :, :, 3:]
         mask_score = pooled_features[:, :, :, 3].sum(-1) / cfg.RCNN.NUM_POINTS
@@ -52,14 +52,14 @@ class ProposalTargetLayer(nn.Module):
         batch_size = batch_rois.shape[0]
         roi_ry = batch_rois[:, :, 6] % (2 * np.pi)
         roi_center = batch_rois[:, :, 0:3]
-        sampled_pts = sampled_pts - roi_center.unsqueeze(dim = 2)  # (B, M, 512, 3)
+        sampled_pts = sampled_pts - roi_center.unsqueeze(dim=2)  # (B, M, 512, 3)
         batch_gt_of_rois[:, :, 0:3] = batch_gt_of_rois[:, :, 0:3] - roi_center
         batch_gt_of_rois[:, :, 6] = batch_gt_of_rois[:, :, 6] - roi_ry
 
         for k in range(batch_size):
             sampled_pts[k] = kitti_utils.rotate_pc_along_y_torch(sampled_pts[k], batch_rois[k, :, 6])
-            batch_gt_of_rois[k] = kitti_utils.rotate_pc_along_y_torch(batch_gt_of_rois[k].unsqueeze(dim = 1),
-                                                                      roi_ry[k]).squeeze(dim = 1)
+            batch_gt_of_rois[k] = kitti_utils.rotate_pc_along_y_torch(batch_gt_of_rois[k].unsqueeze(dim=1),
+                                                                      roi_ry[k]).squeeze(dim=1)
 
         # regression valid mask
         valid_mask = (pooled_empty_flag == 0)
@@ -71,14 +71,14 @@ class ProposalTargetLayer(nn.Module):
         batch_cls_label[valid_mask == 0] = -1
         batch_cls_label[invalid_mask > 0] = -1
 
-        output_dict = { 'sampled_pts'   : sampled_pts.view(-1, cfg.RCNN.NUM_POINTS, 3),
-                        'pts_feature'   : sampled_features.view(-1, cfg.RCNN.NUM_POINTS, sampled_features.shape[3]),
-                        'cls_label'     : batch_cls_label.view(-1),
-                        'mask_score'    : mask_score.view(-1),
-                        'reg_valid_mask': reg_valid_mask.view(-1),
-                        'gt_of_rois'    : batch_gt_of_rois.view(-1, 7),
-                        'gt_iou'        : batch_roi_iou.view(-1),
-                        'roi_boxes3d'   : batch_rois.view(-1, 7) }
+        output_dict = {'sampled_pts': sampled_pts.view(-1, cfg.RCNN.NUM_POINTS, 3),
+                       'pts_feature': sampled_features.view(-1, cfg.RCNN.NUM_POINTS, sampled_features.shape[3]),
+                       'cls_label': batch_cls_label.view(-1),
+                       'mask_score': mask_score.view(-1),
+                       'reg_valid_mask': reg_valid_mask.view(-1),
+                       'gt_of_rois': batch_gt_of_rois.view(-1, 7),
+                       'gt_iou': batch_roi_iou.view(-1),
+                       'roi_boxes3d': batch_rois.view(-1, 7)}
 
         return output_dict
 
@@ -110,7 +110,7 @@ class ProposalTargetLayer(nn.Module):
             # include gt boxes in the candidate rois
             iou3d = iou3d_utils.boxes_iou3d_gpu(cur_roi, cur_gt[:, 0:7])  # (M, N)
 
-            max_overlaps, gt_assignment = torch.max(iou3d, dim = 1)
+            max_overlaps, gt_assignment = torch.max(iou3d, dim=1)
 
             # sample fg, easy_bg, hard_bg
             fg_thresh = min(cfg.RCNN.REG_FG_THRESH, cfg.RCNN.CLS_FG_THRESH)
@@ -162,7 +162,7 @@ class ProposalTargetLayer(nn.Module):
                 gt_of_fg_rois = cur_gt[gt_assignment[fg_inds]]
                 iou3d_src = max_overlaps[fg_inds]
                 fg_rois, fg_iou3d = self.aug_roi_by_noise_torch(fg_rois_src, gt_of_fg_rois, iou3d_src,
-                                                                aug_times = cfg.RCNN.ROI_FG_AUG_TIMES)
+                                                                aug_times=cfg.RCNN.ROI_FG_AUG_TIMES)
                 roi_list.append(fg_rois)
                 roi_iou_list.append(fg_iou3d)
                 roi_gt_list.append(gt_of_fg_rois)
@@ -173,14 +173,14 @@ class ProposalTargetLayer(nn.Module):
                 iou3d_src = max_overlaps[bg_inds]
                 aug_times = 1 if cfg.RCNN.ROI_FG_AUG_TIMES > 0 else 0
                 bg_rois, bg_iou3d = self.aug_roi_by_noise_torch(bg_rois_src, gt_of_bg_rois, iou3d_src,
-                                                                aug_times = aug_times)
+                                                                aug_times=aug_times)
                 roi_list.append(bg_rois)
                 roi_iou_list.append(bg_iou3d)
                 roi_gt_list.append(gt_of_bg_rois)
 
-            rois = torch.cat(roi_list, dim = 0)
-            iou_of_rois = torch.cat(roi_iou_list, dim = 0)
-            gt_of_rois = torch.cat(roi_gt_list, dim = 0)
+            rois = torch.cat(roi_list, dim=0)
+            iou_of_rois = torch.cat(roi_iou_list, dim=0)
+            gt_of_rois = torch.cat(roi_gt_list, dim=0)
 
             batch_rois[idx] = rois
             batch_gt_of_rois[idx] = gt_of_rois
@@ -194,30 +194,30 @@ class ProposalTargetLayer(nn.Module):
             easy_bg_rois_num = bg_rois_per_this_image - hard_bg_rois_num
 
             # sampling hard bg
-            rand_idx = torch.randint(low = 0, high = hard_bg_inds.numel(), size = (hard_bg_rois_num,)).long()
+            rand_idx = torch.randint(low=0, high=hard_bg_inds.numel(), size=(hard_bg_rois_num,)).long()
             hard_bg_inds = hard_bg_inds[rand_idx]
 
             # sampling easy bg
-            rand_idx = torch.randint(low = 0, high = easy_bg_inds.numel(), size = (easy_bg_rois_num,)).long()
+            rand_idx = torch.randint(low=0, high=easy_bg_inds.numel(), size=(easy_bg_rois_num,)).long()
             easy_bg_inds = easy_bg_inds[rand_idx]
 
-            bg_inds = torch.cat([hard_bg_inds, easy_bg_inds], dim = 0)
+            bg_inds = torch.cat([hard_bg_inds, easy_bg_inds], dim=0)
         elif hard_bg_inds.numel() > 0 and easy_bg_inds.numel() == 0:
             hard_bg_rois_num = bg_rois_per_this_image
             # sampling hard bg
-            rand_idx = torch.randint(low = 0, high = hard_bg_inds.numel(), size = (hard_bg_rois_num,)).long()
+            rand_idx = torch.randint(low=0, high=hard_bg_inds.numel(), size=(hard_bg_rois_num,)).long()
             bg_inds = hard_bg_inds[rand_idx]
         elif hard_bg_inds.numel() == 0 and easy_bg_inds.numel() > 0:
             easy_bg_rois_num = bg_rois_per_this_image
             # sampling easy bg
-            rand_idx = torch.randint(low = 0, high = easy_bg_inds.numel(), size = (easy_bg_rois_num,)).long()
+            rand_idx = torch.randint(low=0, high=easy_bg_inds.numel(), size=(easy_bg_rois_num,)).long()
             bg_inds = easy_bg_inds[rand_idx]
         else:
             raise NotImplementedError
 
         return bg_inds
 
-    def aug_roi_by_noise_torch(self, roi_boxes3d, gt_boxes3d, iou3d_src, aug_times = 10):
+    def aug_roi_by_noise_torch(self, roi_boxes3d, gt_boxes3d, iou3d_src, aug_times=10):
         iou_of_rois = torch.zeros(roi_boxes3d.shape[0]).type_as(gt_boxes3d)
         pos_thresh = min(cfg.RCNN.REG_FG_THRESH, cfg.RCNN.CLS_FG_THRESH)
 
@@ -253,10 +253,10 @@ class ProposalTargetLayer(nn.Module):
         random shift, scale, orientation
         """
         if cfg.RCNN.REG_AUG_METHOD == 'single':
-            pos_shift = (torch.rand(3, device = box3d.device) - 0.5)  # [-0.5 ~ 0.5]
-            hwl_scale = (torch.rand(3, device = box3d.device) - 0.5) / (0.5 / 0.15) + 1.0  #
-            angle_rot = (torch.rand(1, device = box3d.device) - 0.5) / (0.5 / (np.pi / 12))  # [-pi/12 ~ pi/12]
-            aug_box3d = torch.cat([box3d[0:3] + pos_shift, box3d[3:6] * hwl_scale, box3d[6:7] + angle_rot], dim = 0)
+            pos_shift = (torch.rand(3, device=box3d.device) - 0.5)  # [-0.5 ~ 0.5]
+            hwl_scale = (torch.rand(3, device=box3d.device) - 0.5) / (0.5 / 0.15) + 1.0  #
+            angle_rot = (torch.rand(1, device=box3d.device) - 0.5) / (0.5 / (np.pi / 12))  # [-pi/12 ~ pi/12]
+            aug_box3d = torch.cat([box3d[0:3] + pos_shift, box3d[3:6] * hwl_scale, box3d[6:7] + angle_rot], dim=0)
             return aug_box3d
         elif cfg.RCNN.REG_AUG_METHOD == 'multiple':
             # pos_range, hwl_range, angle_range, mean_iou
@@ -265,25 +265,25 @@ class ProposalTargetLayer(nn.Module):
                             [0.5, 0.15, np.pi / 9, 0.5],
                             [0.8, 0.15, np.pi / 6, 0.3],
                             [1.0, 0.15, np.pi / 3, 0.2]]
-            idx = torch.randint(low = 0, high = len(range_config), size = (1,))[0].long()
+            idx = torch.randint(low=0, high=len(range_config), size=(1,))[0].long()
 
-            pos_shift = ((torch.rand(3, device = box3d.device) - 0.5) / 0.5) * range_config[idx][0]
-            hwl_scale = ((torch.rand(3, device = box3d.device) - 0.5) / 0.5) * range_config[idx][1] + 1.0
-            angle_rot = ((torch.rand(1, device = box3d.device) - 0.5) / 0.5) * range_config[idx][2]
+            pos_shift = ((torch.rand(3, device=box3d.device) - 0.5) / 0.5) * range_config[idx][0]
+            hwl_scale = ((torch.rand(3, device=box3d.device) - 0.5) / 0.5) * range_config[idx][1] + 1.0
+            angle_rot = ((torch.rand(1, device=box3d.device) - 0.5) / 0.5) * range_config[idx][2]
 
-            aug_box3d = torch.cat([box3d[0:3] + pos_shift, box3d[3:6] * hwl_scale, box3d[6:7] + angle_rot], dim = 0)
+            aug_box3d = torch.cat([box3d[0:3] + pos_shift, box3d[3:6] * hwl_scale, box3d[6:7] + angle_rot], dim=0)
             return aug_box3d
         elif cfg.RCNN.REG_AUG_METHOD == 'normal':
-            x_shift = np.random.normal(loc = 0, scale = 0.3)
-            y_shift = np.random.normal(loc = 0, scale = 0.2)
-            z_shift = np.random.normal(loc = 0, scale = 0.3)
-            h_shift = np.random.normal(loc = 0, scale = 0.25)
-            w_shift = np.random.normal(loc = 0, scale = 0.15)
-            l_shift = np.random.normal(loc = 0, scale = 0.5)
+            x_shift = np.random.normal(loc=0, scale=0.3)
+            y_shift = np.random.normal(loc=0, scale=0.2)
+            z_shift = np.random.normal(loc=0, scale=0.3)
+            h_shift = np.random.normal(loc=0, scale=0.25)
+            w_shift = np.random.normal(loc=0, scale=0.15)
+            l_shift = np.random.normal(loc=0, scale=0.5)
             ry_shift = ((torch.rand() - 0.5) / 0.5) * np.pi / 12
 
             aug_box3d = np.array([box3d[0] + x_shift, box3d[1] + y_shift, box3d[2] + z_shift, box3d[3] + h_shift,
-                                  box3d[4] + w_shift, box3d[5] + l_shift, box3d[6] + ry_shift], dtype = np.float32)
+                                  box3d[4] + w_shift, box3d[5] + l_shift, box3d[6] + ry_shift], dtype=np.float32)
             aug_box3d = torch.from_numpy(aug_box3d).type_as(box3d)
             return aug_box3d
         else:
@@ -299,7 +299,7 @@ class ProposalTargetLayer(nn.Module):
         batch_size, boxes_num = pts.shape[0], pts.shape[1]
 
         # rotation augmentation
-        angles = (torch.rand((batch_size, boxes_num), device = pts.device) - 0.5 / 0.5) * (np.pi / cfg.AUG_ROT_RANGE)
+        angles = (torch.rand((batch_size, boxes_num), device=pts.device) - 0.5 / 0.5) * (np.pi / cfg.AUG_ROT_RANGE)
 
         # calculate gt alpha from gt_of_rois
         temp_x, temp_z, temp_ry = gt_of_rois[:, :, 0], gt_of_rois[:, :, 2], gt_of_rois[:, :, 6]
@@ -312,9 +312,9 @@ class ProposalTargetLayer(nn.Module):
 
         for k in range(batch_size):
             pts[k] = kitti_utils.rotate_pc_along_y_torch(pts[k], angles[k])
-            gt_of_rois[k] = kitti_utils.rotate_pc_along_y_torch(gt_of_rois[k].unsqueeze(dim = 1), angles[k]).squeeze(
-                dim = 1)
-            rois[k] = kitti_utils.rotate_pc_along_y_torch(rois[k].unsqueeze(dim = 1), angles[k]).squeeze(dim = 1)
+            gt_of_rois[k] = kitti_utils.rotate_pc_along_y_torch(gt_of_rois[k].unsqueeze(dim=1), angles[k]).squeeze(
+                dim=1)
+            rois[k] = kitti_utils.rotate_pc_along_y_torch(rois[k].unsqueeze(dim=1), angles[k]).squeeze(dim=1)
 
             # calculate the ry after rotation
             temp_x, temp_z = gt_of_rois[:, :, 0], gt_of_rois[:, :, 2]
@@ -326,14 +326,14 @@ class ProposalTargetLayer(nn.Module):
             rois[:, :, 6] = torch.sign(temp_beta) * np.pi / 2 + roi_alpha - temp_beta
 
         # scaling augmentation
-        scales = 1 + ((torch.rand((batch_size, boxes_num), device = pts.device) - 0.5) / 0.5) * 0.05
-        pts = pts * scales.unsqueeze(dim = 2).unsqueeze(dim = 3)
-        gt_of_rois[:, :, 0:6] = gt_of_rois[:, :, 0:6] * scales.unsqueeze(dim = 2)
-        rois[:, :, 0:6] = rois[:, :, 0:6] * scales.unsqueeze(dim = 2)
+        scales = 1 + ((torch.rand((batch_size, boxes_num), device=pts.device) - 0.5) / 0.5) * 0.05
+        pts = pts * scales.unsqueeze(dim=2).unsqueeze(dim=3)
+        gt_of_rois[:, :, 0:6] = gt_of_rois[:, :, 0:6] * scales.unsqueeze(dim=2)
+        rois[:, :, 0:6] = rois[:, :, 0:6] * scales.unsqueeze(dim=2)
 
         # flip augmentation
-        flip_flag = torch.sign(torch.rand((batch_size, boxes_num), device = pts.device) - 0.5)
-        pts[:, :, :, 0] = pts[:, :, :, 0] * flip_flag.unsqueeze(dim = 2)
+        flip_flag = torch.sign(torch.rand((batch_size, boxes_num), device=pts.device) - 0.5)
+        pts[:, :, :, 0] = pts[:, :, :, 0] * flip_flag.unsqueeze(dim=2)
         gt_of_rois[:, :, 0] = gt_of_rois[:, :, 0] * flip_flag
         # flip orientation: ry > 0: pi - ry, ry < 0: -pi - ry
         src_ry = gt_of_rois[:, :, 6]

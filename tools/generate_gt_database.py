@@ -12,15 +12,15 @@ import argparse
 from lib.datasets.kitti_rcnn_dataset import interpolate_img_by_xy
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--save_dir', type = str, default = './gt_database')
-parser.add_argument('--class_name', type = str, default = 'Car')
-parser.add_argument('--split', type = str, default = 'train')
+parser.add_argument('--save_dir', type=str, default='./gt_database')
+parser.add_argument('--class_name', type=str, default='Car')
+parser.add_argument('--split', type=str, default='train')
 args = parser.parse_args()
 
 
 class GTDatabaseGenerator(KittiDataset):
-    def __init__(self, root_dir, split = 'train', classes = args.class_name):
-        super().__init__(root_dir, split = split)
+    def __init__(self, root_dir, split='train', classes=args.class_name):
+        super().__init__(root_dir, split=split)
         self.gt_database = None
         if classes == 'Car':
             self.classes = ('Background', 'Car')
@@ -68,7 +68,7 @@ class GTDatabaseGenerator(KittiDataset):
 
             obj_list = self.filtrate_objects(self.get_label(sample_id))
 
-            gt_boxes3d = np.zeros((obj_list.__len__(), 7), dtype = np.float32)
+            gt_boxes3d = np.zeros((obj_list.__len__(), 7), dtype=np.float32)
             for k, obj in enumerate(obj_list):
                 gt_boxes3d[k, 0:3], gt_boxes3d[k, 3], gt_boxes3d[k, 4], gt_boxes3d[k, 5], gt_boxes3d[k, 6] \
                     = obj.pos, obj.h, obj.w, obj.l, obj.ry
@@ -89,16 +89,15 @@ class GTDatabaseGenerator(KittiDataset):
                 # (N,2)
                 cur_pts_img_xy = pts_img[pt_mask_flag].astype(np.float32)
 
-                cur_pts_rgb=interpolate_img_by_xy(img, cur_pts_img_xy, shape)
+                cur_pts_rgb = interpolate_img_by_xy(img, cur_pts_img_xy, shape)
 
-
-                sample_dict = { 'sample_id': sample_id,
-                                'cls_type' : obj_list[k].cls_type,
-                                'gt_box3d' : gt_boxes3d[k],
-                                'points'   : cur_pts,
-                                'rgb'      : cur_pts_rgb,
-                                'intensity': cur_pts_intensity,
-                                'obj'      : obj_list[k] }
+                sample_dict = {'sample_id': sample_id,
+                               'cls_type': obj_list[k].cls_type,
+                               'gt_box3d': gt_boxes3d[k],
+                               'points': cur_pts,
+                               'rgb': cur_pts_rgb,
+                               'intensity': cur_pts_intensity,
+                               'obj': obj_list[k]}
                 gt_database.append(sample_dict)
 
         save_file_name = os.path.join(args.save_dir, '%s_gt_database_3level_%s.pkl' % (args.split, self.classes[-1]))
@@ -110,8 +109,8 @@ class GTDatabaseGenerator(KittiDataset):
 
 
 if __name__ == '__main__':
-    dataset = GTDatabaseGenerator(root_dir = '../../data/', split = args.split)
-    os.makedirs(args.save_dir, exist_ok = True)
+    dataset = GTDatabaseGenerator(root_dir='../../data/', split=args.split)
+    os.makedirs(args.save_dir, exist_ok=True)
 
     dataset.generate_gt_database()
 
