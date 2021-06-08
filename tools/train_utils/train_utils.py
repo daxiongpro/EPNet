@@ -127,7 +127,7 @@ class Trainer(object):
         self.model.train()
 
         self.optimizer.zero_grad()
-        loss, tb_dict, disp_dict = self.model_fn(self.model, batch)
+        loss, tb_dict, disp_dict = self.model_fn(self.model, batch)  # tools/train_utils/train_utils.py -> model_fn
 
         loss.backward()
         clip_grad_norm_(self.model.parameters(), self.grad_norm_clip)

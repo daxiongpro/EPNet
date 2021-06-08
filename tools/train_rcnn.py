@@ -202,8 +202,8 @@ if __name__ == "__main__":
     backup_dir = os.path.join(root_result_dir, 'backup_files')
     os.makedirs(backup_dir, exist_ok=True)
     os.system('cp *.py %s/' % backup_dir)
-    os.system('cp ../lib/ %s/' % backup_dir)
-    os.system('cp ../tools %s/' % backup_dir)
+    os.system('cp -r ../lib/ %s/' % backup_dir)
+    os.system('cp -r ../tools %s/' % backup_dir)
     os.system('cp ../*.py %s/' % backup_dir)
 
     # tensorboard log

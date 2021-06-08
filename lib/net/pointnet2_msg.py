@@ -121,6 +121,7 @@ def get_model(input_channels=6, use_xyz=True):
     return Pointnet2MSG(input_channels=input_channels, use_xyz=use_xyz)
 
 
+# 融合Lidar、点云特征
 class Pointnet2MSG(nn.Module):
     def __init__(self, input_channels=6, use_xyz=True):
         super().__init__()

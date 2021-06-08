@@ -19,7 +19,7 @@ def interpolate_img_by_xy(img, xy, normal_shape):
     """
     # (B,3,H,W)
     channel = img.shape[-1]
-    img = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2)
+    img = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2)  # img:(?, c, h, w)
     # print(xy.min(),xy.max())
     xy = xy * 2 / (normal_shape - 1.) - 1.
     # print(xy.min(), xy.max())
@@ -36,11 +36,19 @@ def interpolate_img_by_xy(img, xy, normal_shape):
 
 
 class KittiRCNNDataset(KittiDataset):
-    def __init__(self, root_dir, npoints=16384, split='train', classes='Car', mode='TRAIN',
+    def __init__(self,
+                 root_dir,
+                 npoints=16384,
+                 split='train',
+                 classes='Car',
+                 mode='TRAIN',
                  random_select=True,
-                 logger=None, rcnn_training_roi_dir=None, rcnn_training_feature_dir=None,
+                 logger=None,
+                 rcnn_training_roi_dir=None,
+                 rcnn_training_feature_dir=None,
                  rcnn_eval_roi_dir=None,
-                 rcnn_eval_feature_dir=None, gt_database_dir=None):
+                 rcnn_eval_feature_dir=None,
+                 gt_database_dir=None):
         super().__init__(root_dir=root_dir, split=split)
         if classes == 'Car':
             self.classes = ('Background', 'Car')
@@ -1326,9 +1334,9 @@ class KittiRCNNDataset(KittiDataset):
 
 
 if __name__ == '__main__':
-    img = np.array([0, 0, 0, 0, 5, 2.]).reshape(3, 2, 1)
-    print(img[2, 0])
+    img = np.array([0, 1, 2, 3, 4, 5.]).reshape(3, 2, 1)
+    # print(img[2, 0])
 
-    xy = np.array([2., 0.5]).reshape(1, 2)
+    xy = np.array([2., 0.5, 1.5, 1.5]).reshape(2, 2)
     y = interpolate_img_by_xy(img, xy, np.array([3., 2.]))
     print(y)

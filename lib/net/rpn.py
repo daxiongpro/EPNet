@@ -78,6 +78,7 @@ class RPN(nn.Module):
         if cfg.LI_FUSION.ENABLED:
             img_input = input_data['img']
             xy_input = input_data['pts_origin_xy']
+            # 将图片融合进模型
             backbone_xyz, backbone_features = self.backbone_net(pts_input, img_input, xy_input)  # (B, N, 3), (B, C, N)
         else:
             backbone_xyz, backbone_features = self.backbone_net(pts_input)  # (B, N, 3), (B, C, N)
