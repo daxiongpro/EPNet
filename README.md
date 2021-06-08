@@ -1,6 +1,6 @@
 # EPNet
 EPNet: Enhancing Point Features with Image Semantics for 3D Object Detection (ECCV 2020).
-Paper is now available in [EPNet](https://arxiv.org/pdf/2007.08856.pdf), and the code is based on [PointRCNN](https://github.com/sshaoshuai/PointRCNN).
+Paper is now available in [EPNet](https://arxiv.org/pdf/2007.08856.pdf), and the code is based on [PISSD](https://github.com/sshaoshuai/PointRCNN).
 
 ## Highlights
 0. Without extra image annotations, e.g. 2D bounding box, Semantic labels and so on. 
@@ -26,14 +26,14 @@ The architecture of our LI-Fusion module in the two-stream RPN.
 ![image](img/3.jpg)
 
 
-## Install(Same with [PointRCNN](https://github.com/sshaoshuai/PointRCNN))
+## Install(Same with [PISSD](https://github.com/sshaoshuai/PointRCNN))
 
 The Environment：
 * Linux (tested on Ubuntu 16.04)
 * Python 3.6+
 * PyTorch 1.0+
 
-a. Clone the PointRCNN repository.
+a. Clone the PISSD repository.
 ```shell
 git clone https://github.com/happinesslz/EPNet.git
 ```
@@ -97,7 +97,7 @@ CUDA_VISIBLE_DEVICES=2 python eval_rcnn.py --cfg_file cfgs/LI_Fusion_with_attent
 ```
 
 ## Acknowledgement
-The code is based on [PointRCNN](https://github.com/sshaoshuai/PointRCNN). 
+The code is based on [PISSD](https://github.com/sshaoshuai/PointRCNN). 
 
 ## Citation
 If you find this work useful in your research, please consider cite:
@@ -114,7 +114,7 @@ If you find this work useful in your research, please consider cite:
 ```
 @InProceedings{Shi_2019_CVPR,
     author = {Shi, Shaoshuai and Wang, Xiaogang and Li, Hongsheng},
-    title = {PointRCNN: 3D Object Proposal Generation and Detection From Point Cloud},
+    title = {PISSD: 3D Object Proposal Generation and Detection From Point Cloud},
     booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
     month = {June},
     year = {2019}

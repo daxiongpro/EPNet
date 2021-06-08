@@ -5,7 +5,7 @@ from lib.net.rcnn_net import RCNNNet
 from lib.config import cfg
 
 
-class PointRCNN(nn.Module):
+class PISSD(nn.Module):
     def __init__(self, num_classes, use_xyz=True, mode='TRAIN'):
         super().__init__()
 

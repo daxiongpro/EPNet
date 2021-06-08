@@ -101,3 +101,10 @@ class KittiDataset(torch_data.Dataset):
 
     def __getitem__(self, item):
         raise NotImplementedError
+
+
+if __name__ == '__main__':
+    root_dir = "../../data/"
+    dataset = KittiDataset(root_dir=root_dir, split="train")
+    calib = dataset.get_calib(1)
+    print(calib)

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-from lib.net.point_rcnn import PointRCNN
+from lib.net.PI_SSD import PISSD
 from lib.datasets.kitti_rcnn_dataset import KittiRCNNDataset
 import tools.train_utils.train_utils as train_utils
 from lib.utils.bbox_transform import decode_bbox_target
@@ -807,9 +807,9 @@ def eval_single_ckpt(root_result_dir):
 
     # create dataloader & network
     test_loader = create_dataloader(logger)
-    # model = PointRCNN(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
+    # model = PISSD(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
     if args.model_type == 'base':
-        model = PointRCNN(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
+        model = PISSD(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
     # elif args.model_type == 'rpn_mscale':
     #     model = PointRCNN_mScale(num_classes = test_loader.dataset.num_class, use_xyz = True, mode = 'TEST')
 
@@ -860,9 +860,9 @@ def repeat_eval_ckpt(root_result_dir, ckpt_dir):
 
     # create dataloader & network
     test_loader = create_dataloader(logger)
-    # model = PointRCNN(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
+    # model = PISSD(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
     if args.model_type == 'base':
-        model = PointRCNN(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
+        model = PISSD(num_classes=test_loader.dataset.num_class, use_xyz=True, mode='TEST')
         # print(model)
 
     # elif args.model_type == 'rpn_mscale':
