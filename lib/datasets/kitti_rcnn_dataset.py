@@ -126,7 +126,6 @@ class KittiRCNNDataset(KittiDataset):
                 continue
             self.sample_id_list.append(sample_id)
 
-
     def get_label(self, idx):
         if idx < 10000:
             label_file = os.path.join(self.label_dir, '%06d.txt' % idx)
@@ -1299,6 +1298,14 @@ if __name__ == '__main__':
                                  split='train',
                                  mode='TRAIN',
                                  classes=cfg.CLASSES)
-    item = train_set[1]
-    print(item.keys())
-    print(item['gt_boxes3d'])
+    input_data = train_set[1]
+    input_channels = int(cfg.RPN.USE_INTENSITY) + 3 * int(cfg.RPN.USE_RGB)
+    from pointnet2_msg import Pointnet2MSG
+
+    net = Pointnet2MSG(input_channels=input_channels, use_xyz=True)
+
+    pts_input = torch.from_numpy(input_data['pts_input'])
+    img_input = torch.from_numpy(input_data['img'])
+    xy_input = torch.from_numpy(input_data['pts_origin_xy'])
+    backbone_xyz, backbone_features = net(pts_input, img_input, xy_input)
+    print(backbone_xyz, backbone_features)

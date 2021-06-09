@@ -194,10 +194,11 @@ class Pointnet2MSG(nn.Module):
 
     def _break_up_pc(self, pc):
         xyz = pc[..., 0:3].contiguous()
-        features = (
-            pc[..., 3:].transpose(1, 2).contiguous()
-            if pc.size(-1) > 3 else None
-        )
+        # features = (
+        #     pc[..., 3:].transpose(1, 2).contiguous()
+        #     if pc.size(-1) > 3 else None
+        # )
+        features = None
 
         return xyz, features
 
@@ -222,7 +223,8 @@ class Pointnet2MSG(nn.Module):
                 li_xy_cor = torch.gather(l_xy_cor[i], 1, li_index)
                 image = self.Img_Block[i](img[i])
                 # print(image.shape)
-                img_gather_feature = Feature_Gather(image, li_xy_cor)  # , scale= 2**(i+1))
+                # 获取点在图片上的特征。li_xy_cor为点的坐标
+                img_gather_feature = Feature_Gather(image, li_xy_cor)
 
                 li_features = self.Fusion_Conv[i](li_features, img_gather_feature)
                 l_xy_cor.append(li_xy_cor)

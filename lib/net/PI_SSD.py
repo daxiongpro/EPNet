@@ -11,20 +11,22 @@ class PISSD(nn.Module):
 
         assert cfg.RPN.ENABLED or cfg.RCNN.ENABLED
 
-        if cfg.RPN.ENABLED:
-            self.rpn = RPN(use_xyz=use_xyz, mode=mode)
+        self.rpn = RPN(use_xyz=use_xyz, mode=mode)
 
-        if cfg.RCNN.ENABLED:
-            rcnn_input_channels = 128  # channels of rpn features
-            if cfg.RCNN.BACKBONE == 'pointnet':
-                self.rcnn_net = RCNNNet(num_classes=num_classes, input_channels=rcnn_input_channels,
-                                        use_xyz=use_xyz)
-            elif cfg.RCNN.BACKBONE == 'pointsift':
-                pass
-            else:
-                raise NotImplementedError
+        rcnn_input_channels = 128  # channels of rpn features
+        if cfg.RCNN.BACKBONE == 'pointnet':
+            self.rcnn_net = RCNNNet(num_classes=num_classes, input_channels=rcnn_input_channels,
+                                    use_xyz=use_xyz)
+        elif cfg.RCNN.BACKBONE == 'pointsift':
+            pass
+        else:
+            raise NotImplementedError
 
     def forward(self, input_data):
+        """
+        @param input_data: dict()
+        @return:
+        """
 
         if cfg.RPN.ENABLED:
             output = {}
@@ -76,4 +78,5 @@ class PISSD(nn.Module):
 
 
 if __name__ == '__main__':
-    pass
+    a = torch.ones(3)
+    b = a.cuda()

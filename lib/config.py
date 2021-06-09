@@ -34,7 +34,7 @@ __C.USE_IOU_BRANCH = False
 
 # config of LI-Fusion
 __C.LI_FUSION = edict()
-__C.LI_FUSION.ENABLED = False
+__C.LI_FUSION.ENABLED = True
 __C.LI_FUSION.IMG_FEATURES_CHANNEL = 128
 __C.LI_FUSION.ADD_Image_Attention = False
 __C.LI_FUSION.IMG_CHANNELS = [3, 64, 128, 256, 512]
