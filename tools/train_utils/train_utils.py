@@ -17,9 +17,8 @@ def save_checkpoint(state, filename='checkpoint'):
     torch.save(state, filename)
 
 
-def load_checkpoint(model=None, optimizer=None, filename='checkpoint', logger=cur_logger):
+def load_checkpoint(model=None, optimizer=None, filename='checkpoint'):
     if os.path.isfile(filename):
-        logger.info("==> Loading from checkpoint '{}'".format(filename))
         checkpoint = torch.load(filename)
         epoch = checkpoint['epoch'] if 'epoch' in checkpoint.keys() else -1
         it = checkpoint.get('it', 0.0)
@@ -27,10 +26,8 @@ def load_checkpoint(model=None, optimizer=None, filename='checkpoint', logger=cu
             model.load_state_dict(checkpoint['model_state'])
         if optimizer is not None and checkpoint['optimizer_state'] is not None:
             optimizer.load_state_dict(checkpoint['optimizer_state'])
-        logger.info("==> Done")
     else:
         raise FileNotFoundError
-
     return it, epoch
 
 
