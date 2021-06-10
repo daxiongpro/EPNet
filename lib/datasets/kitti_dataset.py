@@ -30,20 +30,33 @@ class KittiDataset(torch_data.Dataset):
         return len(self.image_idx_list)
 
     def __getitem__(self, index) -> dict:
+        """获取单个样本
+        @param index: (int)
+        @return: sample_info (dict):
+        dict_keys([
+        'sample_id',
+        'random_select',
+        'img',
+        'pts_origin_xy',
+        'aug_method',
+        'pts_input',
+        'pts_rect',
+        'pts_features',
+        'rpn_cls_label',
+        'rpn_reg_label',
+        'gt_boxes3d'
+        ])
         """
-        @param index: int
-        @return: sample_info -> dict
-        """
-        sample_id = int(self.image_idx_list[index])
-        if sample_id < 10000:
-            calib = self.get_calib(sample_id)
-            img = self.get_image_rgb_with_normal(sample_id)
-            img_shape = self.get_image_shape(sample_id)
-            pts_lidar = self.get_lidar(sample_id)
 
-            # get valid point (projected points should be in image)
-            pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 用途？
-            pts_intensity = pts_lidar[:, 3]  # 用途？
+        sample_id = int(self.image_idx_list[index])
+        calib = self.get_calib(sample_id)
+        img = self.get_image_rgb_with_normal(sample_id)
+        img_shape = self.get_image_shape(sample_id)
+        pts_lidar = self.get_lidar(sample_id)  # (N, xyz_intensity) = (113110, 4)
+
+        # get valid point (projected points should be in image)
+        pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 用途？
+        pts_intensity = pts_lidar[:, 3]  # lidar 强度
 
         pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)
         pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
@@ -51,70 +64,22 @@ class KittiDataset(torch_data.Dataset):
         pts_rect = pts_rect[pts_valid_flag][:, 0:3]
 
         pts_intensity = pts_intensity[pts_valid_flag]
-        pts_origin_xy = pts_img[pts_valid_flag]
-        # generate inputs
+        pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
 
-
-        ret_pts_features = np.concatenate(pts_features, axis=1) if pts_features.__len__() > 1 else pts_features[0]
-
-        sample_info = {'sample_id': sample_id, 'random_select': self.random_select, 'img': img,
-                       'pts_origin_xy': pts_origin_xy}
-
-        if self.mode == 'TEST':
-            if cfg.RPN.USE_INTENSITY:
-                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
-            else:
-                pts_input = ret_pts_rect
-            sample_info['pts_input'] = pts_input
-            sample_info['pts_rect'] = ret_pts_rect
-            sample_info['pts_features'] = ret_pts_features
-
-            return sample_info
-
-        gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
-        # if cfg.GT_AUG_ENABLED and self.mode == 'TRAIN' and gt_aug_flag:
-        #     gt_obj_list.extend(extra_gt_obj_list)
-        gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)
-
-        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)
-        for k, obj in enumerate(gt_obj_list):
-            gt_alpha[k] = obj.alpha
-
-        # data augmentation
-        aug_pts_rect = ret_pts_rect.copy()
-        aug_gt_boxes3d = gt_boxes3d.copy()
-        if cfg.AUG_DATA and self.mode == 'TRAIN':
-            #
-            aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(aug_pts_rect, aug_gt_boxes3d, gt_alpha,
-                                                                              sample_id)
-            sample_info['aug_method'] = aug_method
-
-        # prepare input
-        if cfg.RPN.USE_INTENSITY:
-            pts_input = np.concatenate((aug_pts_rect, ret_pts_features), axis=1)  # (N, C)
-        else:
-            pts_input = aug_pts_rect
-
-        if cfg.RPN.FIXED:
-            sample_info['pts_input'] = pts_input
-            sample_info['pts_rect'] = aug_pts_rect
-            #
-            sample_info['pts_features'] = ret_pts_features
-            sample_info['gt_boxes3d'] = aug_gt_boxes3d
-            return sample_info
-
-        # generate training labels
-        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
-        sample_info['pts_input'] = pts_input
-        sample_info['pts_rect'] = aug_pts_rect
-        sample_info['pts_features'] = ret_pts_features
-        sample_info['rpn_cls_label'] = rpn_cls_label
-        sample_info['rpn_reg_label'] = rpn_reg_label
-        sample_info['gt_boxes3d'] = aug_gt_boxes3d
+        sample_info = {
+            'sample_id': sample_id,
+            'img': img,
+            'pts_origin_xy': pts_origin_xy,
+            'pts_input': pts_lidar,  # xyz_intensity坐标、
+            'pts_rect': ret_pts_rect,
+            'pts_features': ret_pts_features,
+            'rpn_cls_label': rpn_cls_label,
+            'rpn_reg_label': rpn_reg_label,
+            'gt_boxes3d': gt_boxes3d
+        }
         return sample_info
 
     def get_image(self, idx):
-
         # cv2.setNumThreads(0)  # for solving deadlock when switching epoch
         img_file = os.path.join(self.image_dir, '%06d.png' % idx)
 

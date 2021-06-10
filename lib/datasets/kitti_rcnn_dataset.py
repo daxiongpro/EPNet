@@ -1293,8 +1293,7 @@ class KittiRCNNDataset(KittiDataset):
 
 
 if __name__ == '__main__':
-    a = torch.ones(3)
-    a.cuda()
+
     train_set = KittiRCNNDataset(root_dir="../../data",
                                  npoints=16384,
                                  split='train',
