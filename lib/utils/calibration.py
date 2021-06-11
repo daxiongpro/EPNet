@@ -41,25 +41,46 @@ class Calibration(object):
         self.ty = self.P2[1, 3] / (-self.fv)
 
     def cart_to_hom(self, pts):
-        """
+        """在pts矩阵增加一列，补1
         :param pts: (N, 3 or 2)
         :return pts_hom: (N, 4 or 3)
         """
         pts_hom = np.hstack((pts, np.ones((pts.shape[0], 1), dtype=np.float32)))
+        """np.hstack()拼接
+        
+        a = np.zeros((3,2))
+        array([[0., 0.],
+               [0., 0.],
+               [0., 0.]])
+               
+        b = np.ones((3,1))
+        array([[1.],
+               [1.],
+               [1.]])
+               
+        c = np.hstack((a,b))        
+        array([[0., 0., 1.],
+               [0., 0., 1.],
+               [0., 0., 1.]])
+        """
         return pts_hom
 
     def lidar_to_rect(self, pts_lidar):
-        """
+        """R0_rect *Tr_velo_to_cam * x：
+        是将Velodyne坐标中的点x投影到编号为2的相机（参考相机）坐标系中
+        仅仅是转换坐标系
         :param pts_lidar: (N, 3)
         :return pts_rect: (N, 3)
         """
         pts_lidar_hom = self.cart_to_hom(pts_lidar)
-        pts_rect = np.dot(pts_lidar_hom, np.dot(self.V2C.T, self.R0.T))
+        pts_rect = np.dot(pts_lidar_hom, np.dot(self.V2C.T, self.R0.T))  # np.dot:矩阵乘积
         # pts_rect = reduce(np.dot, (pts_lidar_hom, self.V2C.T, self.R0.T))
         return pts_rect
 
     def rect_to_img(self, pts_rect):
-        """
+        """P2 * R0_rect *Tr_velo_to_cam * x：
+        是将Velodyne坐标中的点x投影到编号为2的相机（参考相机）坐标系中，再投影到编号为2的相机（左彩色相机）的照片上
+        将转换过的坐标系的lidar转换为img和depth
         :param pts_rect: (N, 3)
         :return pts_img: (N, 2)
         """

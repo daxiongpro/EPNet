@@ -49,17 +49,15 @@ class KittiDataset(torch_data.Dataset):
         """
 
         sample_id = int(self.image_idx_list[index])
-        calib = self.get_calib(sample_id)
         img = self.get_image_rgb_with_normal(sample_id)
-        img_shape = self.get_image_shape(sample_id)
+
         pts_lidar = self.get_lidar(sample_id)  # (N, xyz_intensity) = (113110, 4)
 
         # get valid point (projected points should be in image)
+        calib = self.get_calib(sample_id)
         pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 用途？
         pts_intensity = pts_lidar[:, 3]  # lidar 强度
-
         pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)
-        pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
 
         pts_rect = pts_rect[pts_valid_flag][:, 0:3]
 
@@ -71,10 +69,10 @@ class KittiDataset(torch_data.Dataset):
             'img': img,
             'pts_origin_xy': pts_origin_xy,
             'pts_input': pts_lidar,  # xyz_intensity坐标、
-            'pts_rect': ret_pts_rect,
-            'pts_features': ret_pts_features,
-            'rpn_cls_label': rpn_cls_label,
-            'rpn_reg_label': rpn_reg_label,
+            'pts_rect': pts_rect,  # 点云校正
+            'pts_features': None,
+            'cls_label': rpn_cls_label,
+            'reg_label': rpn_reg_label,
             'gt_boxes3d': gt_boxes3d
         }
         return sample_info
@@ -153,4 +151,6 @@ if __name__ == '__main__':
     a.cuda()
     root_dir = "../../data/"
     dataset = KittiDataset(root_dir=root_dir, split="train")
-    print(dataset[1])
+    # print(dataset[1])
+    label = dataset.get_label(1)
+    print(label)
