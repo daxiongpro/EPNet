@@ -68,7 +68,7 @@ class Calibration(object):
     def lidar_to_rect(self, pts_lidar):
         """R0_rect *Tr_velo_to_cam * x：
         是将Velodyne坐标中的点x投影到编号为2的相机（参考相机）坐标系中
-        仅仅是转换坐标系
+        仅仅是转换坐标系，返回点云在相机坐标系中的坐标
         :param pts_lidar: (N, 3)
         :return pts_rect: (N, 3)
         """

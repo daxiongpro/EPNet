@@ -181,6 +181,11 @@ def in_hull(p, hull):
 
 
 def objs_to_boxes3d(obj_list):
+    """
+
+    @param obj_list: list, 每个item是一个3dobject对象
+    @return: numpy(M, 7)，表示M个object，每个object回归框用7个量表示
+    """
     boxes3d = np.zeros((obj_list.__len__(), 7), dtype=np.float32)
     for k, obj in enumerate(obj_list):
         boxes3d[k, 0:3], boxes3d[k, 3], boxes3d[k, 4], boxes3d[k, 5], boxes3d[k, 6] \

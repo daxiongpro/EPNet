@@ -7,9 +7,11 @@ import datasets.kitti_utils as kitti_utils
 from PIL import Image
 import cv2
 
+from config import cfg
+
 
 class KittiDataset(torch_data.Dataset):
-    def __init__(self, root_dir, split='train'):
+    def __init__(self, root_dir, split='train', classes='Car'):
         self.split = split
 
         self.trainset_dir = os.path.join(root_dir, 'KITTI', 'object', 'training')
@@ -25,6 +27,20 @@ class KittiDataset(torch_data.Dataset):
         self.std = [0.229, 0.224, 0.225]
         # Don't need to permute while using grid_sample
         self.image_hw_with_padding_np = np.array([1280., 384.])  # 用途？
+
+        if classes == 'Car':
+            self.classes = ('Background', 'Car')
+            aug_scene_root_dir = os.path.join(root_dir, 'KITTI', 'aug_scene')
+        elif classes == 'People':
+            self.classes = ('Background', 'Pedestrian', 'Cyclist')
+        elif classes == 'Pedestrian':
+            self.classes = ('Background', 'Pedestrian')
+            aug_scene_root_dir = os.path.join(root_dir, 'KITTI', 'aug_scene_ped')
+        elif classes == 'Cyclist':
+            self.classes = ('Background', 'Cyclist')
+            aug_scene_root_dir = os.path.join(root_dir, 'KITTI', 'aug_scene_cyclist')
+        else:
+            assert False, "Invalid classes: %s" % classes
 
     def __len__(self):
         return len(self.image_idx_list)
@@ -50,16 +66,29 @@ class KittiDataset(torch_data.Dataset):
 
         sample_id = int(self.image_idx_list[index])
         img = self.get_image_rgb_with_normal(sample_id)
-
         pts_lidar = self.get_lidar(sample_id)  # (N, xyz_intensity) = (113110, 4)
+
+        gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
+        gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)
 
         # get valid point (projected points should be in image)
         calib = self.get_calib(sample_id)
-        pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 用途？
+        pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标
         pts_intensity = pts_lidar[:, 3]  # lidar 强度
-        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)
+        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云投影到深度图，深度图的深度
+        img_shape = self.get_image_shape(sample_id)
+        pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth,
+                                             img_shape)  # np.ndarrya(True, False, False, True...)
+        pts_intensity = pts_intensity[pts_valid_flag]
+        pts_origin_xy = pts_img[pts_valid_flag]
 
-        pts_rect = pts_rect[pts_valid_flag][:, 0:3]
+        pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
+        """
+        >>> a = np.array([1, 2, 3])
+        >>> b = np.array([ True, False,  True])
+        >>> a[b]
+        array([1, 3])
+        """
 
         pts_intensity = pts_intensity[pts_valid_flag]
         pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
@@ -69,13 +98,72 @@ class KittiDataset(torch_data.Dataset):
             'img': img,
             'pts_origin_xy': pts_origin_xy,
             'pts_input': pts_lidar,  # xyz_intensity坐标、
-            'pts_rect': pts_rect,  # 点云校正
+            'pts_rect': pts_rect,  # 点云在相机坐标系下坐标
             'pts_features': None,
             'cls_label': rpn_cls_label,
             'reg_label': rpn_reg_label,
             'gt_boxes3d': gt_boxes3d
         }
         return sample_info
+
+    @staticmethod
+    def get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape):
+        """
+        Valid point should be in the image (and in the PC_AREA_SCOPE)
+        :param pts_rect:
+        :param pts_img:
+        :param pts_rect_depth:
+        :param img_shape:
+        :return:
+        """
+        val_flag_1 = np.logical_and(pts_img[:, 0] >= 0, pts_img[:, 0] < img_shape[1])
+        val_flag_2 = np.logical_and(pts_img[:, 1] >= 0, pts_img[:, 1] < img_shape[0])
+        val_flag_merge = np.logical_and(val_flag_1, val_flag_2)
+        pts_valid_flag = np.logical_and(val_flag_merge, pts_rect_depth >= 0)
+
+        if cfg.PC_REDUCE_BY_RANGE:
+            x_range, y_range, z_range = cfg.PC_AREA_SCOPE
+            pts_x, pts_y, pts_z = pts_rect[:, 0], pts_rect[:, 1], pts_rect[:, 2]
+            range_flag = (pts_x >= x_range[0]) & (pts_x <= x_range[1]) \
+                         & (pts_y >= y_range[0]) & (pts_y <= y_range[1]) \
+                         & (pts_z >= z_range[0]) & (pts_z <= z_range[1])
+            pts_valid_flag = pts_valid_flag & range_flag
+        return pts_valid_flag
+
+    @staticmethod
+    def check_pc_range(xyz):
+        """查看xyz是否在指定范围内，z必须在[0, 70.4]范围内
+        :param xyz: [x, y, z]
+        :return: bool
+        """
+        x_range, y_range, z_range = cfg.PC_AREA_SCOPE
+        if (x_range[0] <= xyz[0] <= x_range[1]) and (y_range[0] <= xyz[1] <= y_range[1]) and \
+                (z_range[0] <= xyz[2] <= z_range[1]):
+            return True
+        return False
+
+    def filtrate_objects(self, obj_list):
+        """忽略掉一些不在范围内或不需要检测的object
+        Discard objects which are not in self.classes (or its similar classes)
+        :param obj_list: list
+        :return: list
+        """
+        type_whitelist = self.classes
+
+        type_whitelist = list(self.classes)
+        if 'Car' in self.classes:
+            type_whitelist.append('Van')
+        if 'Pedestrian' in self.classes:  # or 'Cyclist' in self.classes:
+            type_whitelist.append('Person_sitting')
+
+        valid_obj_list = []
+        for obj in obj_list:
+            if obj.cls_type not in type_whitelist:
+                continue
+            if cfg.PC_REDUCE_BY_RANGE and (self.check_pc_range(obj.pos) is False):
+                continue
+            valid_obj_list.append(obj)
+        return valid_obj_list
 
     def get_image(self, idx):
         # cv2.setNumThreads(0)  # for solving deadlock when switching epoch
@@ -151,6 +239,4 @@ if __name__ == '__main__':
     a.cuda()
     root_dir = "../../data/"
     dataset = KittiDataset(root_dir=root_dir, split="train")
-    # print(dataset[1])
-    label = dataset.get_label(1)
-    print(label)
+    print(dataset[1])
