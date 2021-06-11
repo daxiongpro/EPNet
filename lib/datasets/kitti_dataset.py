@@ -235,8 +235,6 @@ class KittiDataset(torch_data.Dataset):
 
 
 if __name__ == '__main__':
-    a = torch.ones(3)
-    a.cuda()
-    root_dir = "../../data/"
+    root_dir = r'D:\code\EPNet\data'
     dataset = KittiDataset(root_dir=root_dir, split="train")
     print(dataset[1])
