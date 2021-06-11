@@ -1,10 +1,9 @@
-import _init_path
 import os
 import numpy as np
 import pickle
 import torch
 
-import lib.utils.kitti_utils as kitti_utils
+import datasets.kitti_utils as kitti_utils
 import lib.utils.roipool3d.roipool3d_utils as roipool3d_utils
 import lib.utils.iou3d.iou3d_utils as iou3d_utils
 from lib.datasets.kitti_dataset import KittiDataset

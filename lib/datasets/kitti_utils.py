@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial import Delaunay
 import scipy
-import lib.utils.object3d as object3d
+import datasets.object3d as object3d
 import torch
 
 

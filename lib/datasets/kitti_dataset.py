@@ -2,8 +2,8 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as torch_data
-import lib.utils.calibration as calibration
-import lib.utils.kitti_utils as kitti_utils
+import datasets.calibration as calibration
+import datasets.kitti_utils as kitti_utils
 from PIL import Image
 import cv2
 

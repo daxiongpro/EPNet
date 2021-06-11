@@ -1,4 +1,3 @@
-import _init_path
 import os
 import numpy as np
 import torch
@@ -7,12 +6,12 @@ import torch.nn.functional as F
 from lib.net.PI_SSD import PISSD
 from lib.datasets.kitti_rcnn_dataset import KittiRCNNDataset
 import tools.train_utils.train_utils as train_utils
-from lib.utils.bbox_transform import decode_bbox_target
+from datasets.bbox_transform import decode_bbox_target
 from tools.kitti_object_eval_python.evaluate import evaluate as kitti_evaluate
 
 from lib.config import cfg, cfg_from_file, save_config_to_file, cfg_from_list
 import argparse
-import lib.utils.kitti_utils as kitti_utils
+import datasets.kitti_utils as kitti_utils
 import lib.utils.iou3d.iou3d_utils as iou3d_utils
 from datetime import datetime
 import logging
@@ -948,8 +947,8 @@ if __name__ == "__main__":
     if args.eval_mode == 'rpn':
         cfg.RPN.ENABLED = True
         cfg.RCNN.ENABLED = False
-        root_result_dir = os.path.join('../', 'output', 'rpn', cfg.TAG)
-        ckpt_dir = os.path.join('../', 'output', 'rpn', cfg.TAG, 'ckpt')
+        root_result_dir = os.path.join('../', 'output', 'lib/net/rpn', cfg.TAG)
+        ckpt_dir = os.path.join('../', 'output', 'lib/net/rpn', cfg.TAG, 'ckpt')
     elif args.eval_mode == 'rcnn':
         cfg.RCNN.ENABLED = True
         cfg.RPN.ENABLED = cfg.RPN.FIXED = True

@@ -1,6 +1,6 @@
 import torch
 import iou3d_cuda
-import lib.utils.kitti_utils as kitti_utils
+import datasets.kitti_utils as kitti_utils
 
 
 def boxes_iou_bev(boxes_a, boxes_b):
