@@ -90,21 +90,63 @@ class KittiDataset(torch_data.Dataset):
         array([1, 3])
         """
 
-        pts_intensity = pts_intensity[pts_valid_flag]
+        # pts_intensity = pts_intensity[pts_valid_flag]
         pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
 
+
+        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(pts_rect, gt_boxes3d)
         sample_info = {
             'sample_id': sample_id,
             'img': img,
             'pts_origin_xy': pts_origin_xy,
-            'pts_input': pts_lidar,  # xyz_intensity坐标、
-            'pts_rect': pts_rect,  # 点云在相机坐标系下坐标
+            'pts_input': pts_lidar,  # xyz_intensity坐标
+            'pts_rect': pts_rect,  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
             'pts_features': None,
             'cls_label': rpn_cls_label,
             'reg_label': rpn_reg_label,
             'gt_boxes3d': gt_boxes3d
         }
         return sample_info
+
+    @staticmethod
+    def generate_rpn_training_labels(pts_rect, gt_boxes3d):
+        """
+        判断pts_rect中的点是否在gt_boxes3d内部，如果是，则pts_rect对应的cls_label赋为对应的标签
+        :param pts_rect: 点云在img坐标系的坐标
+        :param gt_boxes3d: img坐标系下的回归框
+        :return:
+        cls_label:(N, 1)
+        reg_label:(N, 7)
+        """
+        cls_label = np.zeros((pts_rect.shape[0]), dtype=np.int32)
+        reg_label = np.zeros((pts_rect.shape[0], 7), dtype=np.float32)  # dx, dy, dz, ry, h, w, l
+        gt_corners = kitti_utils.boxes3d_to_corners3d(gt_boxes3d, rotate=True)
+        extend_gt_boxes3d = kitti_utils.enlarge_box3d(gt_boxes3d, extra_width=0.2)
+        extend_gt_corners = kitti_utils.boxes3d_to_corners3d(extend_gt_boxes3d, rotate=True)
+        for k in range(gt_boxes3d.shape[0]):
+            box_corners = gt_corners[k]
+            fg_pt_flag = kitti_utils.in_hull(pts_rect, box_corners)
+            fg_pts_rect = pts_rect[fg_pt_flag]
+            cls_label[fg_pt_flag] = 1
+
+            # enlarge the bbox3d, ignore nearby points
+            extend_box_corners = extend_gt_corners[k]
+            fg_enlarge_flag = kitti_utils.in_hull(pts_rect, extend_box_corners)
+            ignore_flag = np.logical_xor(fg_pt_flag, fg_enlarge_flag)
+            cls_label[ignore_flag] = -1
+
+            # pixel offset of object center
+            center3d = gt_boxes3d[k][0:3].copy()  # (x, y, z)
+            center3d[1] -= gt_boxes3d[k][3] / 2
+            reg_label[fg_pt_flag, 0:3] = center3d - fg_pts_rect  # Now y is the true center of 3d box 20180928
+
+            # size and angle encoding
+            reg_label[fg_pt_flag, 3] = gt_boxes3d[k][3]  # h
+            reg_label[fg_pt_flag, 4] = gt_boxes3d[k][4]  # w
+            reg_label[fg_pt_flag, 5] = gt_boxes3d[k][5]  # l
+            reg_label[fg_pt_flag, 6] = gt_boxes3d[k][6]  # ry
+
+        return cls_label, reg_label
 
     @staticmethod
     def get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape):
