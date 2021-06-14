@@ -2,12 +2,12 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as torch_data
-import datasets.calibration as calibration
-import datasets.kitti_utils as kitti_utils
+import lib.datasets.calibration as calibration
+import lib.datasets.kitti_utils as kitti_utils
 from PIL import Image
 import cv2
 
-from config import cfg
+from lib.config import cfg
 
 
 class KittiDataset(torch_data.Dataset):
