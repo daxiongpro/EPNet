@@ -6,14 +6,12 @@ import lib.datasets.calibration as calibration
 import lib.datasets.kitti_utils as kitti_utils
 from PIL import Image
 import cv2
-
 from lib.config import cfg
 
 
 class KittiDataset(torch_data.Dataset):
     def __init__(self, root_dir, split='train', classes='Car'):
         self.split = split
-
         self.trainset_dir = os.path.join(root_dir, 'KITTI', 'object', 'training')
         split_dir = os.path.join(root_dir, 'KITTI', 'ImageSets', split + '.txt')
         self.image_idx_list = [x.strip() for x in open(split_dir).readlines()]
@@ -73,14 +71,12 @@ class KittiDataset(torch_data.Dataset):
 
         # get valid point (projected points should be in image)
         calib = self.get_calib(sample_id)
-        pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标
+        pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标。 rect：矩形
         pts_intensity = pts_lidar[:, 3]  # lidar 强度
         pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云投影到深度图，深度图的深度
         img_shape = self.get_image_shape(sample_id)
         pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth,
                                              img_shape)  # np.ndarrya(True, False, False, True...)
-        pts_intensity = pts_intensity[pts_valid_flag]
-        pts_origin_xy = pts_img[pts_valid_flag]
 
         pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
         """
@@ -89,24 +85,112 @@ class KittiDataset(torch_data.Dataset):
         >>> a[b]
         array([1, 3])
         """
+        self.npoints = 16384
+        if self.npoints < len(pts_rect):
+            pts_depth = pts_rect[:, 2]
+            pts_near_flag = pts_depth < 40.0
+            # 离相机距离 > 40 的点的index
+            far_idxs_choice = np.where(pts_near_flag == 0)[0]
+            near_idxs = np.where(pts_near_flag == 1)[0]
+
+            near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace=False)
+
+            choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
+                if len(far_idxs_choice) > 0 else near_idxs_choice
+            np.random.shuffle(choice)
+        else:
+            choice = np.arange(0, len(pts_rect), dtype=np.int32)
+            if self.npoints > len(pts_rect):
+                extra_choice = np.random.choice(choice, self.npoints - len(pts_rect), replace=False)
+                choice = np.concatenate((choice, extra_choice), axis=0)
+            np.random.shuffle(choice)
+
+
+        ret_pts_rect = pts_rect[choice, :]
 
         # pts_intensity = pts_intensity[pts_valid_flag]
         pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
+        ret_pts_origin_xy = pts_origin_xy[choice, :]
 
-
-        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(pts_rect, gt_boxes3d)
+        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)
+        for k, obj in enumerate(gt_obj_list):
+            gt_alpha[k] = obj.alpha
+        aug_pts_rect = ret_pts_rect.copy()
+        aug_gt_boxes3d = gt_boxes3d.copy()
+        aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(aug_pts_rect, aug_gt_boxes3d, gt_alpha,
+                                                                          sample_id)
+        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(ret_pts_rect, gt_boxes3d)
         sample_info = {
             'sample_id': sample_id,
             'img': img,
-            'pts_origin_xy': pts_origin_xy,
-            'pts_input': pts_lidar,  # xyz_intensity坐标
-            'pts_rect': pts_rect,  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
-            'pts_features': None,
+            'pts_origin_xy': ret_pts_origin_xy,
+            'pts_input': ret_pts_rect,  # xyz_intensity坐标
+            'pts_rect': aug_pts_rect,  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
+            # 'pts_features': None,
             'cls_label': rpn_cls_label,
             'reg_label': rpn_reg_label,
-            'gt_boxes3d': gt_boxes3d
+            'gt_boxes3d': aug_gt_boxes3d
         }
         return sample_info
+
+    def data_augmentation(self, aug_pts_rect, aug_gt_boxes3d, gt_alpha, sample_id=None, mustaug=False, stage=1):
+        """
+        :param aug_pts_rect: (N, 3)
+        :param aug_gt_boxes3d: (N, 7)
+        :param gt_alpha: (N)
+        :return:
+        """
+        aug_list = cfg.AUG_METHOD_LIST
+        aug_enable = 1 - np.random.rand(3)
+        if mustaug is True:
+            aug_enable[0] = -1
+            aug_enable[1] = -1
+        aug_method = []
+        if 'rotation' in aug_list and aug_enable[0] < cfg.AUG_METHOD_PROB[0]:
+            angle = np.random.uniform(-np.pi / cfg.AUG_ROT_RANGE, np.pi / cfg.AUG_ROT_RANGE)
+            aug_pts_rect = kitti_utils.rotate_pc_along_y(aug_pts_rect, rot_angle=angle)
+            if stage == 1:
+                # xyz change, hwl unchange
+                aug_gt_boxes3d = kitti_utils.rotate_pc_along_y(aug_gt_boxes3d, rot_angle=angle)
+
+                # calculate the ry after rotation
+                x, z = aug_gt_boxes3d[:, 0], aug_gt_boxes3d[:, 2]
+                beta = np.arctan2(z, x)
+                new_ry = np.sign(beta) * np.pi / 2 + gt_alpha - beta
+                aug_gt_boxes3d[:, 6] = new_ry  # TODO: not in [-np.pi / 2, np.pi / 2]
+            elif stage == 2:
+                # for debug stage-2, this implementation has little float precision difference with the above one
+                assert aug_gt_boxes3d.shape[0] == 2
+                aug_gt_boxes3d[0] = self.rotate_box3d_along_y(aug_gt_boxes3d[0], angle)
+                aug_gt_boxes3d[1] = self.rotate_box3d_along_y(aug_gt_boxes3d[1], angle)
+            else:
+                raise NotImplementedError
+
+            aug_method.append(['rotation', angle])
+
+        if 'scaling' in aug_list and aug_enable[1] < cfg.AUG_METHOD_PROB[1]:
+            scale = np.random.uniform(0.95, 1.05)
+            aug_pts_rect = aug_pts_rect * scale
+            aug_gt_boxes3d[:, 0:6] = aug_gt_boxes3d[:, 0:6] * scale
+            aug_method.append(['scaling', scale])
+
+        if 'flip' in aug_list and aug_enable[2] < cfg.AUG_METHOD_PROB[2]:
+            # flip horizontal
+            aug_pts_rect[:, 0] = -aug_pts_rect[:, 0]
+            aug_gt_boxes3d[:, 0] = -aug_gt_boxes3d[:, 0]
+            # flip orientation: ry > 0: pi - ry, ry < 0: -pi - ry
+            if stage == 1:
+                aug_gt_boxes3d[:, 6] = np.sign(aug_gt_boxes3d[:, 6]) * np.pi - aug_gt_boxes3d[:, 6]
+            elif stage == 2:
+                assert aug_gt_boxes3d.shape[0] == 2
+                aug_gt_boxes3d[0, 6] = np.sign(aug_gt_boxes3d[0, 6]) * np.pi - aug_gt_boxes3d[0, 6]
+                aug_gt_boxes3d[1, 6] = np.sign(aug_gt_boxes3d[1, 6]) * np.pi - aug_gt_boxes3d[1, 6]
+            else:
+                raise NotImplementedError
+
+            aug_method.append('flip')
+
+        return aug_pts_rect, aug_gt_boxes3d, aug_method
 
     @staticmethod
     def generate_rpn_training_labels(pts_rect, gt_boxes3d):
@@ -277,6 +361,17 @@ class KittiDataset(torch_data.Dataset):
 
 
 if __name__ == '__main__':
-    root_dir = r'D:\code\EPNet\data'
+    # root_dir = r'D:\code\EPNet\data'
+    root_dir = '../../data'
     dataset = KittiDataset(root_dir=root_dir, split="train")
-    print(dataset[1])
+    # print(dataset[4])
+    for i in range(7):
+        print('sample_id:', dataset[i]['sample_id'])
+        for key in dataset[i].keys():
+            if key != 'sample_id' and key != 'pts_features':
+                print(key, dataset[i][key].shape)
+        print()
+
+    # print(dataset[1])
+# dict_keys(['sample_id', 'img', 'pts_origin_xy', 'pts_input',
+# 'pts_rect', 'pts_features', 'cls_label', 'reg_label', 'gt_boxes3d'])

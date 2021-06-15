@@ -1121,8 +1121,10 @@ class KittiRCNNDataset(KittiDataset):
             if self.npoints < len(pts_rect):
                 pts_depth = pts_rect[:, 2]
                 pts_near_flag = pts_depth < 40.0
+                # 离相机距离 > 40 的点的index
                 far_idxs_choice = np.where(pts_near_flag == 0)[0]
                 near_idxs = np.where(pts_near_flag == 1)[0]
+
                 near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace=False)
 
                 choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
@@ -1149,6 +1151,7 @@ class KittiRCNNDataset(KittiDataset):
         sample_info = {'sample_id': sample_id, 'random_select': self.random_select, 'img': img,
                        'pts_origin_xy': ret_pts_origin_xy}
 
+        # 测试集评价指标用另外的代码写，在这里不用gt。gt跟网络的预测结果，用另外的代码进行比较
         if self.mode == 'TEST':
             if cfg.RPN.USE_INTENSITY:
                 pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
