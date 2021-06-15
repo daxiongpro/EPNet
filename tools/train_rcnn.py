@@ -24,7 +24,7 @@ def create_dataloader():
     train_set = KittiDataset(root_dir=DATA_PATH, split='train', classes='Car')
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, pin_memory=True,
-                              num_workers=args.workers, shuffle=True, drop_last=True)
+                              num_workers=args.workers, shuffle=True, collate_fn=train_set.collate_batch, drop_last=True)
 
     test_set = KittiDataset(root_dir=DATA_PATH, split='train', classes='Car')
 
@@ -37,13 +37,14 @@ if __name__ == "__main__":
 
     train_loader, test_loader = create_dataloader()
     dataset = train_loader.dataset
-    for i in range(5):
-        for key in dataset[i].keys():
-            if key != 'sample_id' and key != 'pts_features':
-                print(key, dataset[i][key].shape)
-        print()
+    # for i in range(5):
+    #     for key in dataset[i].keys():
+    #         if key != 'sample_id' and key != 'pts_features':
+    #             print(key, dataset[i][key].shape)
+    #     print()
 
     for cur_it, batch in enumerate(train_loader):
+        print()
         print(batch)
 
     # model = PISSD(num_classes=len(train_loader.dataset), use_xyz=True, mode='TRAIN')
