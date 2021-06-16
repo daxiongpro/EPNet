@@ -428,8 +428,8 @@ class KittiRCNNDataset(KittiDataset):
 
         # generate training labels
         rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
-        sample_info['pts_input'] = pts_input
-        sample_info['pts_rect'] = aug_pts_rect
+        sample_info['pts_input'] = pts_input# xyz_intensity坐标
+        sample_info['pts_rect'] = aug_pts_rect# 点云在相机坐标系下坐标 pts_rect: (N, 3)
         sample_info['pts_features'] = ret_pts_features
         sample_info['rpn_cls_label'] = rpn_cls_label
         sample_info['rpn_reg_label'] = rpn_reg_label
