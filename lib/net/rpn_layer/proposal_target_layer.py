@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from lib.config import cfg
-import datasets.kitti_utils as kitti_utils
+import lib.datasets.kitti_utils as kitti_utils
 import lib.utils.roipool3d.roipool3d_utils as roipool3d_utils
 import lib.utils.iou3d.iou3d_utils as iou3d_utils
 

@@ -44,7 +44,7 @@ __C.LI_FUSION.DeConv_Reduce = [16, 16, 16, 16]
 __C.LI_FUSION.DeConv_Kernels = [2, 4, 8, 16]
 __C.LI_FUSION.DeConv_Strides = [2, 4, 8, 16]
 
-# 1. config of rpn network
+# 1. config of rpn_layer network
 __C.RPN = edict()
 __C.RPN.ENABLED = True
 __C.RPN.FIXED = False

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from lib.net.rpn import RPN
-from lib.net.rcnn_net import RCNNNet
+# from lib.net.rcnn_net import RCNNNet
 from lib.config import cfg
 
 
@@ -13,7 +13,7 @@ class PISSD(nn.Module):
 
         self.rpn = RPN(use_xyz=use_xyz, mode=mode)
 
-        rcnn_input_channels = 128  # channels of rpn features
+        rcnn_input_channels = 128  # channels of rpn_layer features
         if cfg.RCNN.BACKBONE == 'pointnet':
             self.rcnn_net = RCNNNet(num_classes=num_classes, input_channels=rcnn_input_channels,
                                     use_xyz=use_xyz)
@@ -30,7 +30,7 @@ class PISSD(nn.Module):
 
         if cfg.RPN.ENABLED:
             output = {}
-            # rpn inference
+            # rpn_layer inference
             with torch.set_grad_enabled((not cfg.RPN.FIXED) and self.training):
                 if cfg.RPN.FIXED:
                     self.rpn.eval()
@@ -41,7 +41,7 @@ class PISSD(nn.Module):
                 backbone_features = rpn_output['backbone_features']
 
             # rcnn inference
-            if cfg.RCNN.ENABLED:
+            if cfg.RCNN.ENABLED:  # Fasle
                 with torch.no_grad():
                     rpn_cls, rpn_reg = rpn_output['rpn_cls'], rpn_output['rpn_reg']
 

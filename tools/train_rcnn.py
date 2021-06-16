@@ -18,7 +18,7 @@ parser.add_argument('--workers', type=int, default=1, help='number of workers fo
 parser.add_argument("--ckpt_save_interval", type=int, default=5, help="number of training epochs")
 parser.add_argument('--output_dir', type=str, default=None, help='specify an output directory if needed')
 parser.add_argument("--ckpt", type=str, default=None, help="continue training from this checkpoint")
-parser.add_argument("--rpn_ckpt", type=str, default=None, help="specify the well-trained rpn checkpoint")
+parser.add_argument("--rpn_ckpt", type=str, default=None, help="specify the well-trained rpn_layer checkpoint")
 args = parser.parse_args()
 
 

@@ -194,24 +194,38 @@ class Pointnet2MSG(nn.Module):
 
     def _break_up_pc(self, pc):
         xyz = pc[..., 0:3].contiguous()
-        # features = (
-        #     pc[..., 3:].transpose(1, 2).contiguous()
-        #     if pc.size(-1) > 3 else None
-        # )
-        features = None
+        features = (
+            pc[..., 3:].transpose(1, 2).contiguous()
+            if pc.size(-1) > 3 else None
+        )
+        # features = None
 
         return xyz, features
 
     def forward(self, pointcloud: torch.cuda.FloatTensor, image=None, xy=None):
+        """
+
+        @param pointcloud: 点云(B, N, xyzf)
+        @param image: 图片(B, W, H)
+        @param xy: 点云在图片上xy的坐标(B, N, 2)
+        @return:
+        """
         xyz, features = self._break_up_pc(pointcloud)
 
         l_xyz, l_features = [xyz], [features]
 
         if cfg.LI_FUSION.ENABLED:
-            #### normalize xy to [-1,1]
+            """
+            # normalize xy to [-1,1]
+            # x / W 取值范围(0, 1)
+            # x / W * 2 取值范围(0, 2)
+            # x / W * 2 -1 取值范围(-1, 1)
+            xy: (B, N, 2)
+            """
             size_range = [1280.0, 384.0]
             xy[:, :, 0] = xy[:, :, 0] / (size_range[0] - 1.0) * 2.0 - 1.0
-            xy[:, :, 1] = xy[:, :, 1] / (size_range[1] - 1.0) * 2.0 - 1.0  # = xy / (size_range - 1.) * 2 - 1.
+            xy[:, :, 1] = xy[:, :, 1] / (size_range[1] - 1.0) * 2.0 - 1.0
+            # = xy / (size_range - 1.) * 2 - 1.
             l_xy_cor = [xy]
             img = [image]
 

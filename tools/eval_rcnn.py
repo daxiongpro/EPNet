@@ -25,13 +25,13 @@ np.random.seed(1024)  # set the same seed
 
 parser = argparse.ArgumentParser(description="arg parser")
 parser.add_argument('--cfg_file', type=str, default='cfgs/default.yml', help='specify the config for evaluation')
-parser.add_argument("--eval_mode", type=str, default='rpn', required=True, help="specify the evaluation mode")
+parser.add_argument("--eval_mode", type=str, default='rpn_layer', required=True, help="specify the evaluation mode")
 
 parser.add_argument('--eval_all', action='store_true', default=False, help='whether to evaluate all checkpoints')
 parser.add_argument('--test', action='store_true', default=False, help='evaluate without ground truth')
 parser.add_argument("--ckpt", type=str, default=None, help="specify a checkpoint to be evaluated")
 parser.add_argument("--rpn_ckpt", type=str, default=None,
-                    help="specify the checkpoint of rpn if trained separated")
+                    help="specify the checkpoint of rpn_layer if trained separated")
 parser.add_argument("--rcnn_ckpt", type=str, default=None,
                     help="specify the checkpoint of rcnn if trained separated")
 
@@ -259,7 +259,7 @@ def eval_one_epoch_rpn(model, dataloader, epoch_id, result_dir, logger):
     logger.info(str(datetime.now()))
     logger.info('-------------------performance of epoch %s---------------------' % epoch_id)
     logger.info('max number of objects: %d' % max_num)
-    logger.info('rpn iou avg: %f' % (rpn_iou_avg / max(cnt, 1.0)))
+    logger.info('rpn_layer iou avg: %f' % (rpn_iou_avg / max(cnt, 1.0)))
 
     ret_dict = {'max_obj_num': max_num, 'rpn_iou': rpn_iou_avg / cnt}
 
@@ -944,11 +944,11 @@ if __name__ == "__main__":
         cfg_from_list(args.set_cfgs)
     cfg.TAG = os.path.splitext(os.path.basename(args.cfg_file))[0]
 
-    if args.eval_mode == 'rpn':
+    if args.eval_mode == 'rpn_layer':
         cfg.RPN.ENABLED = True
         cfg.RCNN.ENABLED = False
-        root_result_dir = os.path.join('../', 'output', 'lib/net/rpn', cfg.TAG)
-        ckpt_dir = os.path.join('../', 'output', 'lib/net/rpn', cfg.TAG, 'ckpt')
+        root_result_dir = os.path.join('../', 'output', 'lib/net/rpn_layer', cfg.TAG)
+        ckpt_dir = os.path.join('../', 'output', 'lib/net/rpn_layer', cfg.TAG, 'ckpt')
     elif args.eval_mode == 'rcnn':
         cfg.RCNN.ENABLED = True
         cfg.RPN.ENABLED = cfg.RPN.FIXED = True

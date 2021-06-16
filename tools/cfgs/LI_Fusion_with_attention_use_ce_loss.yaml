@@ -34,7 +34,7 @@ LI_FUSION:
   DeConv_Kernels: [ 2, 4, 8, 16 ]
   DeConv_Strides: [ 2, 4, 8, 16 ]
 
-# 1. config of rpn network
+# 1. config of rpn_layer network
 RPN:
   ENABLED: True
   FIXED: False

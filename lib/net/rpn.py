@@ -1,11 +1,13 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from .rpn.proposal_layer import ProposalLayer
+
 import pointnet2_lib.pointnet2.pytorch_utils as pt_utils
-import datasets.loss_utils as loss_utils
+import lib.utils.loss_utils as loss_utils
 from lib.config import cfg
-from pointnet2_msg import Pointnet2MSG
+from lib.net.pointnet2_msg import Pointnet2MSG
+
+from lib.net.rpn_layer.proposal_layer import ProposalLayer
 
 
 class RPN(nn.Module):

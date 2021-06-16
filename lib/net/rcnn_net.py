@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModule
-from rpn.proposal_target_layer import ProposalTargetLayer
+from lib.net.rpn_layer.proposal_target_layer import ProposalTargetLayer
 import pointnet2_lib.pointnet2.pytorch_utils as pt_utils
-import datasets.loss_utils as loss_utils
+import lib.utils.loss_utils as loss_utils
 from lib.config import cfg
 
-import datasets.kitti_utils as kitti_utils
+import lib.datasets.kitti_utils as kitti_utils
 import lib.utils.roipool3d.roipool3d_utils as roipool3d_utils
 
 
