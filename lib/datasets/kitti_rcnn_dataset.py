@@ -159,20 +159,6 @@ class KittiSSDDataset(KittiDataset):
     def get_road_plane(self, idx):
         return super().get_road_plane(idx % 10000)
 
-    @staticmethod
-    def get_rpn_features(rpn_feature_dir, idx):
-        rpn_feature_file = os.path.join(rpn_feature_dir, '%06d.npy' % idx)
-        rpn_xyz_file = os.path.join(rpn_feature_dir, '%06d_xyz.npy' % idx)
-        rpn_intensity_file = os.path.join(rpn_feature_dir, '%06d_intensity.npy' % idx)
-        if cfg.RCNN.USE_SEG_SCORE:
-            rpn_seg_file = os.path.join(rpn_feature_dir, '%06d_rawscore.npy' % idx)
-            rpn_seg_score = np.load(rpn_seg_file).reshape(-1)
-            rpn_seg_score = torch.sigmoid(torch.from_numpy(rpn_seg_score)).numpy()
-        else:
-            rpn_seg_file = os.path.join(rpn_feature_dir, '%06d_seg.npy' % idx)
-            rpn_seg_score = np.load(rpn_seg_file).reshape(-1)
-        return np.load(rpn_xyz_file), np.load(rpn_feature_file), np.load(rpn_intensity_file).reshape(-1), rpn_seg_score
-
     def filtrate_objects(self, obj_list):
         """忽略掉一些不在范围内或不需要检测的object
         Discard objects which are not in self.classes (or its similar classes)
@@ -194,16 +180,6 @@ class KittiSSDDataset(KittiDataset):
             if self.mode == 'TRAIN' and cfg.PC_REDUCE_BY_RANGE and (self.check_pc_range(obj.pos) is False):
                 continue
             valid_obj_list.append(obj)
-        return valid_obj_list
-
-    @staticmethod
-    def filtrate_dc_objects(obj_list):
-        valid_obj_list = []
-        for obj in obj_list:
-            if obj.cls_type in ['DontCare']:
-                continue
-            valid_obj_list.append(obj)
-
         return valid_obj_list
 
     @staticmethod
@@ -242,38 +218,6 @@ class KittiSSDDataset(KittiDataset):
                          & (pts_z >= z_range[0]) & (pts_z <= z_range[1])
             pts_valid_flag = pts_valid_flag & range_flag
         return pts_valid_flag
-
-    def __len__(self):
-        if cfg.RPN.ENABLED:
-            return len(self.sample_id_list)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                return len(self.sample_id_list)
-            else:
-                return len(self.image_idx_list)
-        else:
-            raise NotImplementedError
-
-    def __getitem__(self, index):
-        if cfg.LI_FUSION.ENABLED:
-            return self.get_rpn_with_li_fusion(index)
-
-        if cfg.RPN.ENABLED:
-            pass
-            # return self.get_rpn_sample(index)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                if cfg.RCNN.ROI_SAMPLE_JIT:
-                    pass
-                    # return self.get_rcnn_sample_jit(index)
-                else:
-                    pass
-                    # return self.get_rcnn_training_sample_batch(index)
-            else:
-                pass
-                # return self.get_proposal_from_file(index)
-        else:
-            raise NotImplementedError
 
     def get_rpn_with_li_fusion(self, index):
         """获取单个样本
@@ -525,6 +469,38 @@ class KittiSSDDataset(KittiDataset):
             aug_method.append('flip')
 
         return aug_pts_rect, aug_gt_boxes3d, aug_method
+
+    def __len__(self):
+        if cfg.RPN.ENABLED:
+            return len(self.sample_id_list)
+        elif cfg.RCNN.ENABLED:
+            if self.mode == 'TRAIN':
+                return len(self.sample_id_list)
+            else:
+                return len(self.image_idx_list)
+        else:
+            raise NotImplementedError
+
+    def __getitem__(self, index):
+        if cfg.LI_FUSION.ENABLED:
+            return self.get_rpn_with_li_fusion(index)
+
+        if cfg.RPN.ENABLED:
+            pass
+            # return self.get_rpn_sample(index)
+        elif cfg.RCNN.ENABLED:
+            if self.mode == 'TRAIN':
+                if cfg.RCNN.ROI_SAMPLE_JIT:
+                    pass
+                    # return self.get_rcnn_sample_jit(index)
+                else:
+                    pass
+                    # return self.get_rcnn_training_sample_batch(index)
+            else:
+                pass
+                # return self.get_proposal_from_file(index)
+        else:
+            raise NotImplementedError
 
     def collate_batch(self, batch):
         """
