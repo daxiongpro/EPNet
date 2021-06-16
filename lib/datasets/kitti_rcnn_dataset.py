@@ -2,10 +2,8 @@ import numpy as np
 import os
 import pickle
 import torch
-
 from lib.datasets.kitti_dataset import KittiDataset
-import datasets.kitti_utils as kitti_utils
-import lib.utils.roipool3d.roipool3d_utils as roipool3d_utils
+import lib.datasets.kitti_utils as kitti_utils
 from lib.config import cfg
 from torch.nn.functional import grid_sample
 
@@ -19,7 +17,7 @@ def interpolate_img_by_xy(img, xy, normal_shape):
     """
     # (B,3,H,W)
     channel = img.shape[-1]
-    img = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2)  # img:(?, c, h, w)
+    img = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2)
     # print(xy.min(),xy.max())
     xy = xy * 2 / (normal_shape - 1.) - 1.
     # print(xy.min(), xy.max())
@@ -36,13 +34,17 @@ def interpolate_img_by_xy(img, xy, normal_shape):
 
 
 class KittiRCNNDataset(KittiDataset):
-    def __init__(self,
-                 root_dir,
+    def __init__(self, root_dir,
                  npoints=16384,
                  split='train',
                  classes='Car',
                  mode='TRAIN',
                  random_select=True,
+                 logger=None,
+                 rcnn_training_roi_dir=None,
+                 rcnn_training_feature_dir=None,
+                 rcnn_eval_roi_dir=None,
+                 rcnn_eval_feature_dir=None,
                  gt_database_dir=None):
         super().__init__(root_dir=root_dir, split=split)
         if classes == 'Car':
@@ -64,6 +66,7 @@ class KittiRCNNDataset(KittiDataset):
         self.npoints = npoints
         self.sample_id_list = []
         self.random_select = random_select
+        self.logger = logger
 
         if split == 'train_aug':
             self.aug_label_dir = os.path.join(aug_scene_root_dir, 'training', 'aug_label')
@@ -78,6 +81,10 @@ class KittiRCNNDataset(KittiDataset):
         self.pos_bbox_list = []
         self.neg_bbox_list = []
         self.far_neg_bbox_list = []
+        self.rcnn_eval_roi_dir = rcnn_eval_roi_dir
+        self.rcnn_eval_feature_dir = rcnn_eval_feature_dir
+        self.rcnn_training_roi_dir = rcnn_training_roi_dir
+        self.rcnn_training_feature_dir = rcnn_training_feature_dir
 
         self.gt_database = None
 
@@ -100,23 +107,38 @@ class KittiRCNNDataset(KittiDataset):
                         else:
                             hard_list.append(obj)
                     self.gt_database = [easy_list, hard_list]
+                    logger.info('Loading gt_database(easy(pt_num>100): %d, hard(pt_num<=100): %d) from %s'
+                                % (len(easy_list), len(hard_list), gt_database_dir))
                 else:
-                    pass
+                    logger.info('Loading gt_database(%d) from %s' % (len(self.gt_database), gt_database_dir))
 
             if mode == 'TRAIN':
                 self.preprocess_rpn_training_data()
             else:
                 self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
-
+                self.logger.info('Load testing samples from %s' % self.imageset_dir)
+                self.logger.info('Done: total test samples %d' % len(self.sample_id_list))
         elif cfg.RCNN.ENABLED:
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
+            self.logger.info('Load testing samples from %s' % self.imageset_dir)
+            self.logger.info('Done: total test samples %d' % len(self.sample_id_list))
+            # for idx in range(0, self.num_sample):
+            #     sample_id = int(self.image_idx_list[idx])
+            #     obj_list = self.filtrate_objects(self.get_label(sample_id))
+            #     if len(obj_list) == 0:
+            #         # logger.info('No gt classes: %06d' % sample_id)
+            #         continue
+            #     self.sample_id_list.append(sample_id)
+            #
+            # print('Done: filter %s results for rcnn training: %d / %d\n' %
+            #       (self.mode, len(self.sample_id_list), len(self.image_idx_list)))
 
     def preprocess_rpn_training_data(self):
         """
         Discard samples which don't have current classes, which will not be used for training.
         Valid sample_id is stored in self.sample_id_list
         """
-
+        self.logger.info('Loading %s samples from %s ...' % (self.mode, self.label_dir))
         for idx in range(0, self.num_sample):
             sample_id = int(self.image_idx_list[idx])
             obj_list = self.filtrate_objects(self.get_label(sample_id))
@@ -125,6 +147,9 @@ class KittiRCNNDataset(KittiDataset):
                 # self.logger.info('No gt classes: %06d' % sample_id)
                 continue
             self.sample_id_list.append(sample_id)
+
+        self.logger.info('Done: filter %s results: %d / %d\n' % (self.mode, len(self.sample_id_list),
+                                                                 len(self.image_idx_list)))
 
     def get_label(self, idx):
         if idx < 10000:
@@ -162,7 +187,7 @@ class KittiRCNNDataset(KittiDataset):
         return np.load(rpn_xyz_file), np.load(rpn_feature_file), np.load(rpn_intensity_file).reshape(-1), rpn_seg_score
 
     def filtrate_objects(self, obj_list):
-        """
+        """忽略掉一些不在范围内或不需要检测的object
         Discard objects which are not in self.classes (or its similar classes)
         :param obj_list: list
         :return: list
@@ -196,9 +221,9 @@ class KittiRCNNDataset(KittiDataset):
 
     @staticmethod
     def check_pc_range(xyz):
-        """
+        """查看xyz是否在指定范围内，z必须在[0, 70.4]范围内
         :param xyz: [x, y, z]
-        :return:
+        :return: bool
         """
         x_range, y_range, z_range = cfg.PC_AREA_SCOPE
         if (x_range[0] <= xyz[0] <= x_range[1]) and (y_range[0] <= xyz[1] <= y_range[1]) and \
@@ -209,12 +234,13 @@ class KittiRCNNDataset(KittiDataset):
     @staticmethod
     def get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape):
         """
+        返回是否为有效点
         Valid point should be in the image (and in the PC_AREA_SCOPE)
-        :param pts_rect:
-        :param pts_img:
-        :param pts_rect_depth:
+        :param pts_rect:点在相机坐标系下的坐标
+        :param pts_img:点在图像坐标系下的坐标
+        :param pts_rect_depth:点在相机坐标系下的深度
         :param img_shape:
-        :return:
+        :return:[True, False, False, True, ...]
         """
         val_flag_1 = np.logical_and(pts_img[:, 0] >= 0, pts_img[:, 0] < img_shape[1])
         val_flag_2 = np.logical_and(pts_img[:, 1] >= 0, pts_img[:, 1] < img_shape[0])
@@ -229,6 +255,186 @@ class KittiRCNNDataset(KittiDataset):
                          & (pts_z >= z_range[0]) & (pts_z <= z_range[1])
             pts_valid_flag = pts_valid_flag & range_flag
         return pts_valid_flag
+
+    def __len__(self):
+        if cfg.RPN.ENABLED:
+            return len(self.sample_id_list)
+        elif cfg.RCNN.ENABLED:
+            if self.mode == 'TRAIN':
+                return len(self.sample_id_list)
+            else:
+                return len(self.image_idx_list)
+        else:
+            raise NotImplementedError
+
+    def __getitem__(self, index):
+        if cfg.LI_FUSION.ENABLED:
+            return self.get_rpn_with_li_fusion(index)
+
+        if cfg.RPN.ENABLED:
+            return self.get_rpn_sample(index)
+        elif cfg.RCNN.ENABLED:
+            if self.mode == 'TRAIN':
+                if cfg.RCNN.ROI_SAMPLE_JIT:
+                    return self.get_rcnn_sample_jit(index)
+                else:
+                    return self.get_rcnn_training_sample_batch(index)
+            else:
+                return self.get_proposal_from_file(index)
+        else:
+            raise NotImplementedError
+
+    def get_rpn_with_li_fusion(self, index):
+        """获取单个样本
+        @param index: (int)
+        @return: sample_info (dict):
+        dict_keys([
+        'sample_id',
+        'random_select',
+        'img',
+        'pts_origin_xy',
+        'aug_method',
+        'pts_input',
+        'pts_rect',
+        'pts_features',
+        'rpn_cls_label',
+        'rpn_reg_label',
+        'gt_boxes3d'
+        ])
+        """
+        sample_id = int(self.sample_id_list[index])
+        if sample_id < 10000:
+            calib = self.get_calib(sample_id)
+            img = self.get_image_rgb_with_normal(sample_id)
+            img_shape = self.get_image_shape(sample_id)
+            pts_lidar = self.get_lidar(sample_id)
+
+            # get valid point (projected points should be in image)
+            pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标
+            pts_intensity = pts_lidar[:, 3]
+
+        else:
+            assert False, print('unable to use aug data with img align')
+            calib = self.get_calib(sample_id % 10000)
+            # img = self.get_image_by_python(sample_id % 10000)
+            img_shape = self.get_image_shape(sample_id % 10000)
+
+            pts_file = os.path.join(self.aug_pts_dir, '%06d.bin' % sample_id)
+            assert os.path.exists(pts_file), '%s' % pts_file
+            aug_pts = np.fromfile(pts_file, dtype=np.float32).reshape(-1, 4)
+            pts_rect, pts_intensity = aug_pts[:, 0:3], aug_pts[:, 3]
+
+        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云投影到深度图，深度图的深度
+        pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
+
+        pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
+        """
+        >>> a = np.array([1, 2, 3])
+        >>> b = np.array([ True, False,  True])
+        >>> a[b]
+        array([1, 3])
+        """
+        pts_intensity = pts_intensity[pts_valid_flag]
+        pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
+
+        # TODO use GT_AUG_ENABLE, failed to align img2d to random box from other scene
+        # if cfg.GT_AUG_ENABLED and self.mode == 'TRAIN':
+        #     # all labels for checking overlapping
+        #     all_gt_obj_list = self.filtrate_dc_objects(self.get_label(sample_id))
+        #     all_gt_boxes3d = kitti_utils.objs_to_boxes3d(all_gt_obj_list)
+        #
+        #     gt_aug_flag = False
+        #     if np.random.rand() < cfg.GT_AUG_APPLY_PROB:
+        #         # augment one scene
+        #         gt_aug_flag, pts_rect, pts_intensity, extra_gt_boxes3d, extra_gt_obj_list = \
+        #             self.apply_gt_aug_to_one_scene(sample_id, pts_rect, pts_intensity, all_gt_boxes3d)
+
+        # generate inputs
+        if self.mode == 'TRAIN' or self.random_select:
+            # make sure len(pts_rect) ==self.npoints
+            if self.npoints < len(pts_rect):
+                pts_depth = pts_rect[:, 2]
+                pts_near_flag = pts_depth < 40.0
+                far_idxs_choice = np.where(pts_near_flag == 0)[0]
+                near_idxs = np.where(pts_near_flag == 1)[0]
+                near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace=False)
+
+                choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
+                    if len(far_idxs_choice) > 0 else near_idxs_choice
+                np.random.shuffle(choice)
+            else:
+                choice = np.arange(0, len(pts_rect), dtype=np.int32)
+                if self.npoints > len(pts_rect):
+                    extra_choice = np.random.choice(choice, self.npoints - len(pts_rect), replace=False)
+                    choice = np.concatenate((choice, extra_choice), axis=0)
+                np.random.shuffle(choice)
+
+            ret_pts_rect = pts_rect[choice, :]
+            ret_pts_intensity = pts_intensity[choice] - 0.5  # translate intensity to [-0.5, 0.5]
+            ret_pts_origin_xy = pts_origin_xy[choice, :]
+        else:
+            ret_pts_rect = pts_rect
+            ret_pts_intensity = pts_intensity - 0.5
+            ret_pts_origin_xy = pts_origin_xy[choice, :]
+
+        pts_features = [ret_pts_intensity.reshape(-1, 1)]
+        ret_pts_features = np.concatenate(pts_features, axis=1) if pts_features.__len__() > 1 else pts_features[0]
+
+        sample_info = {'sample_id': sample_id, 'random_select': self.random_select, 'img': img,
+                       'pts_origin_xy': ret_pts_origin_xy}
+
+        if self.mode == 'TEST':
+            if cfg.RPN.USE_INTENSITY:
+                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
+            else:
+                pts_input = ret_pts_rect
+            sample_info['pts_input'] = pts_input
+            sample_info['pts_rect'] = ret_pts_rect
+            sample_info['pts_features'] = ret_pts_features
+
+            return sample_info
+
+        gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
+        # if cfg.GT_AUG_ENABLED and self.mode == 'TRAIN' and gt_aug_flag:
+        #     gt_obj_list.extend(extra_gt_obj_list)
+        gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)
+
+        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)
+        for k, obj in enumerate(gt_obj_list):
+            gt_alpha[k] = obj.alpha
+
+        # data augmentation
+        aug_pts_rect = ret_pts_rect.copy()
+        aug_gt_boxes3d = gt_boxes3d.copy()
+        if cfg.AUG_DATA and self.mode == 'TRAIN':
+            #
+            aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(aug_pts_rect, aug_gt_boxes3d, gt_alpha,
+                                                                              sample_id)
+            sample_info['aug_method'] = aug_method
+
+        # prepare input
+        if cfg.RPN.USE_INTENSITY:
+            pts_input = np.concatenate((aug_pts_rect, ret_pts_features), axis=1)  # (N, C)
+        else:
+            pts_input = aug_pts_rect
+
+        if cfg.RPN.FIXED:
+            sample_info['pts_input'] = pts_input
+            sample_info['pts_rect'] = aug_pts_rect
+            #
+            sample_info['pts_features'] = ret_pts_features
+            sample_info['gt_boxes3d'] = aug_gt_boxes3d
+            return sample_info
+
+        # generate training labels
+        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
+        sample_info['pts_input'] = pts_input
+        sample_info['pts_rect'] = aug_pts_rect
+        sample_info['pts_features'] = ret_pts_features
+        sample_info['rpn_cls_label'] = rpn_cls_label
+        sample_info['rpn_reg_label'] = rpn_reg_label
+        sample_info['gt_boxes3d'] = aug_gt_boxes3d
+        return sample_info
 
     def get_rpn_sample(self, index):
         sample_id = int(self.sample_id_list[index])
@@ -367,6 +573,14 @@ class KittiRCNNDataset(KittiDataset):
 
     @staticmethod
     def generate_rpn_training_labels(pts_rect, gt_boxes3d):
+        """
+        判断pts_rect中的点是否在gt_boxes3d内部，如果是，则pts_rect对应的cls_label赋为对应的标签
+        :param pts_rect: 点云在img坐标系的坐标
+        :param gt_boxes3d: img坐标系下的回归框
+        :return:
+        cls_label:(N, 1)
+        reg_label:(N, 7)
+        """
         cls_label = np.zeros((pts_rect.shape[0]), dtype=np.int32)
         reg_label = np.zeros((pts_rect.shape[0], 7), dtype=np.float32)  # dx, dy, dz, ry, h, w, l
         gt_corners = kitti_utils.boxes3d_to_corners3d(gt_boxes3d, rotate=True)
@@ -576,6 +790,103 @@ class KittiRCNNDataset(KittiDataset):
 
         return aug_pts_rect, aug_gt_boxes3d, aug_method
 
+    def get_rcnn_sample_info(self, roi_info):
+        sample_id, gt_box3d = roi_info['sample_id'], roi_info['gt_box3d']
+        rpn_xyz, rpn_features, rpn_intensity, seg_mask = self.rpn_feature_list[sample_id]
+
+        # augmentation original roi by adding noise
+        roi_box3d = self.aug_roi_by_noise(roi_info)
+
+        # point cloud pooling based on roi_box3d
+        pooled_boxes3d = kitti_utils.enlarge_box3d(roi_box3d.reshape(1, 7), cfg.RCNN.POOL_EXTRA_WIDTH)
+
+        boxes_pts_mask_list = roipool3d_utils.pts_in_boxes3d_cpu(torch.from_numpy(rpn_xyz),
+                                                                 torch.from_numpy(pooled_boxes3d))
+        pt_mask_flag = (boxes_pts_mask_list[0].numpy() == 1)
+        cur_pts = rpn_xyz[pt_mask_flag].astype(np.float32)
+
+        # data augmentation
+        aug_pts = cur_pts.copy()
+        aug_gt_box3d = gt_box3d.copy().astype(np.float32)
+        aug_roi_box3d = roi_box3d.copy()
+        if cfg.AUG_DATA and self.mode == 'TRAIN':
+            # calculate alpha by ry
+            temp_boxes3d = np.concatenate([aug_roi_box3d.reshape(1, 7), aug_gt_box3d.reshape(1, 7)], axis=0)
+            temp_x, temp_z, temp_ry = temp_boxes3d[:, 0], temp_boxes3d[:, 2], temp_boxes3d[:, 6]
+            temp_beta = np.arctan2(temp_z, temp_x).astype(np.float64)
+            temp_alpha = -np.sign(temp_beta) * np.pi / 2 + temp_beta + temp_ry
+
+            # data augmentation
+            aug_pts, aug_boxes3d, aug_method = self.data_augmentation(aug_pts, temp_boxes3d, temp_alpha, mustaug=True,
+                                                                      stage=2)
+            aug_roi_box3d, aug_gt_box3d = aug_boxes3d[0], aug_boxes3d[1]
+            aug_gt_box3d = aug_gt_box3d.astype(gt_box3d.dtype)
+
+        # Pool input points
+        valid_mask = 1  # whether the input is valid
+
+        if aug_pts.shape[0] == 0:
+            pts_features = np.zeros((1, 128), dtype=np.float32)
+            input_channel = 3 + int(cfg.RCNN.USE_INTENSITY) + int(cfg.RCNN.USE_MASK) + int(cfg.RCNN.USE_DEPTH)
+            pts_input = np.zeros((1, input_channel), dtype=np.float32)
+            valid_mask = 0
+        else:
+            pts_features = rpn_features[pt_mask_flag].astype(np.float32)
+            pts_intensity = rpn_intensity[pt_mask_flag].astype(np.float32)
+
+            pts_input_list = [aug_pts, pts_intensity.reshape(-1, 1)]
+            if cfg.RCNN.USE_INTENSITY:
+                pts_input_list = [aug_pts, pts_intensity.reshape(-1, 1)]
+            else:
+                pts_input_list = [aug_pts]
+
+            if cfg.RCNN.USE_MASK:
+                if cfg.RCNN.MASK_TYPE == 'seg':
+                    pts_mask = seg_mask[pt_mask_flag].astype(np.float32)
+                elif cfg.RCNN.MASK_TYPE == 'roi':
+                    pts_mask = roipool3d_utils.pts_in_boxes3d_cpu(torch.from_numpy(aug_pts),
+                                                                  torch.from_numpy(aug_roi_box3d.reshape(1, 7)))
+                    pts_mask = (pts_mask[0].numpy() == 1).astype(np.float32)
+                else:
+                    raise NotImplementedError
+
+                pts_input_list.append(pts_mask.reshape(-1, 1))
+
+            if cfg.RCNN.USE_DEPTH:
+                pts_depth = np.linalg.norm(aug_pts, axis=1, ord=2)
+                pts_depth_norm = (pts_depth / 70.0) - 0.5
+                pts_input_list.append(pts_depth_norm.reshape(-1, 1))
+
+            pts_input = np.concatenate(pts_input_list, axis=1)  # (N, C)
+
+        aug_gt_corners = kitti_utils.boxes3d_to_corners3d(aug_gt_box3d.reshape(-1, 7))
+        aug_roi_corners = kitti_utils.boxes3d_to_corners3d(aug_roi_box3d.reshape(-1, 7))
+        iou3d = kitti_utils.get_iou3d(aug_roi_corners, aug_gt_corners)
+        cur_iou = iou3d[0][0]
+
+        # regression valid mask
+        reg_valid_mask = 1 if cur_iou >= cfg.RCNN.REG_FG_THRESH and valid_mask == 1 else 0
+
+        # classification label
+        cls_label = 1 if cur_iou > cfg.RCNN.CLS_FG_THRESH else 0
+        if cfg.RCNN.CLS_BG_THRESH < cur_iou < cfg.RCNN.CLS_FG_THRESH or valid_mask == 0:
+            cls_label = -1
+
+        # canonical transform and sampling
+        pts_input_ct, gt_box3d_ct = self.canonical_transform(pts_input, aug_roi_box3d, aug_gt_box3d)
+        pts_input_ct, pts_features = self.rcnn_input_sample(pts_input_ct, pts_features)
+
+        sample_info = {'sample_id': sample_id,
+                       'pts_input': pts_input_ct,
+                       'pts_features': pts_features,
+                       'cls_label': cls_label,
+                       'reg_valid_mask': reg_valid_mask,
+                       'gt_boxes3d_ct': gt_box3d_ct,
+                       'roi_boxes3d': aug_roi_box3d,
+                       'roi_size': aug_roi_box3d[3:6],
+                       'gt_boxes3d': aug_gt_box3d}
+
+        return sample_info
 
     @staticmethod
     def canonical_transform(pts_input, roi_box3d, gt_box3d):
@@ -699,8 +1010,6 @@ class KittiRCNNDataset(KittiDataset):
             raise NotImplementedError
 
     def get_proposal_from_file(self, index):
-        pass
-
         sample_id = int(self.image_idx_list[index])
         proposal_file = os.path.join(self.rcnn_eval_roi_dir, '%06d.txt' % sample_id)
         roi_obj_list = kitti_utils.get_objects_from_label(proposal_file)
@@ -1016,6 +1325,14 @@ class KittiRCNNDataset(KittiDataset):
         return sample_info
 
     def collate_batch(self, batch):
+        """
+        用在创建Dataloader里面，collate_fn=collate_batch
+        将返回的n个字典{"a": [28,28]},{"a": [28,28]},{"a": [28,28]} ……
+        转换成：{"a": [n，28,28]}
+        这里是把不同shape的'gt_boxes3d'的tensor变为相同形状，然后合并成一个字典
+        @param batch:
+        @return:dict
+        """
         if self.mode != 'TRAIN' and cfg.RCNN.ENABLED and not cfg.RPN.ENABLED:
             assert batch.__len__() == 1
             return batch[0]
@@ -1051,175 +1368,9 @@ class KittiRCNNDataset(KittiDataset):
 
         return ans_dict
 
-    def __len__(self):
-        if cfg.RPN.ENABLED:
-            return len(self.sample_id_list)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                return len(self.sample_id_list)
-            else:
-                return len(self.image_idx_list)
-        else:
-            raise NotImplementedError
-
-    def __getitem__(self, index):
-        if cfg.LI_FUSION.ENABLED:
-            return self.get_rpn_with_li_fusion(index)
-
-        if cfg.RPN.ENABLED:
-            return self.get_rpn_sample(index)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                if cfg.RCNN.ROI_SAMPLE_JIT:
-                    return self.get_rcnn_sample_jit(index)
-                else:
-                    return self.get_rcnn_training_sample_batch(index)
-            else:
-                return self.get_proposal_from_file(index)
-        else:
-            raise NotImplementedError
-
-    def get_rpn_with_li_fusion(self, index):
-        sample_id = int(self.sample_id_list[index])
-        if sample_id < 10000:
-            calib = self.get_calib(sample_id)
-            img = self.get_image_rgb_with_normal(sample_id)
-            img_shape = self.get_image_shape(sample_id)
-            pts_lidar = self.get_lidar(sample_id)
-
-            # get valid point (projected points should be in image)
-            pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])
-            pts_intensity = pts_lidar[:, 3]
-
-        else:
-            assert False, print('unable to use aug data with img align')
-            calib = self.get_calib(sample_id % 10000)
-            # img = self.get_image_by_python(sample_id % 10000)
-            img_shape = self.get_image_shape(sample_id % 10000)
-
-            pts_file = os.path.join(self.aug_pts_dir, '%06d.bin' % sample_id)
-            assert os.path.exists(pts_file), '%s' % pts_file
-            aug_pts = np.fromfile(pts_file, dtype=np.float32).reshape(-1, 4)
-            pts_rect, pts_intensity = aug_pts[:, 0:3], aug_pts[:, 3]
-
-        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)
-        pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
-
-        pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
-        """
-        >>> a = np.array([1, 2, 3])
-        >>> b = np.array([ True, False,  True])
-        >>> a[b]
-        array([1, 3])
-        """
-
-        pts_intensity = pts_intensity[pts_valid_flag]
-        pts_origin_xy = pts_img[pts_valid_flag]
-        # generate inputs
-        if self.mode == 'TRAIN' or self.random_select:
-            # make sure len(pts_rect) ==self.npoints
-            if self.npoints < len(pts_rect):
-                pts_depth = pts_rect[:, 2]
-                pts_near_flag = pts_depth < 40.0
-                # 离相机距离 > 40 的点的index
-                far_idxs_choice = np.where(pts_near_flag == 0)[0]
-                near_idxs = np.where(pts_near_flag == 1)[0]
-
-                near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace=False)
-
-                choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
-                    if len(far_idxs_choice) > 0 else near_idxs_choice
-                np.random.shuffle(choice)
-            else:
-                choice = np.arange(0, len(pts_rect), dtype=np.int32)
-                if self.npoints > len(pts_rect):
-                    extra_choice = np.random.choice(choice, self.npoints - len(pts_rect), replace=False)
-                    choice = np.concatenate((choice, extra_choice), axis=0)
-                np.random.shuffle(choice)
-
-            ret_pts_rect = pts_rect[choice, :]
-            ret_pts_intensity = pts_intensity[choice] - 0.5  # translate intensity to [-0.5, 0.5]
-            ret_pts_origin_xy = pts_origin_xy[choice, :]
-        else:
-            ret_pts_rect = pts_rect
-            ret_pts_intensity = pts_intensity - 0.5
-            ret_pts_origin_xy = pts_origin_xy[choice, :]
-
-        pts_features = [ret_pts_intensity.reshape(-1, 1)]
-        ret_pts_features = np.concatenate(pts_features, axis=1) if pts_features.__len__() > 1 else pts_features[0]
-
-        sample_info = {'sample_id': sample_id, 'random_select': self.random_select, 'img': img,
-                       'pts_origin_xy': ret_pts_origin_xy}
-
-        # 测试集评价指标用另外的代码写，在这里不用gt。gt跟网络的预测结果，用另外的代码进行比较
-        if self.mode == 'TEST':
-            if cfg.RPN.USE_INTENSITY:
-                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
-            else:
-                pts_input = ret_pts_rect
-            sample_info['pts_input'] = pts_input
-            sample_info['pts_rect'] = ret_pts_rect
-            sample_info['pts_features'] = ret_pts_features
-
-            return sample_info
-
-        gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
-        # if cfg.GT_AUG_ENABLED and self.mode == 'TRAIN' and gt_aug_flag:
-        #     gt_obj_list.extend(extra_gt_obj_list)
-        gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)  # numpy(M, 7)
-
-        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)
-        for k, obj in enumerate(gt_obj_list):
-            gt_alpha[k] = obj.alpha
-
-        # data augmentation
-        aug_pts_rect = ret_pts_rect.copy()
-        aug_gt_boxes3d = gt_boxes3d.copy()
-        if cfg.AUG_DATA and self.mode == 'TRAIN':
-            #
-            aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(aug_pts_rect, aug_gt_boxes3d, gt_alpha,
-                                                                              sample_id)
-            sample_info['aug_method'] = aug_method
-
-        # prepare input
-        if cfg.RPN.USE_INTENSITY:
-            pts_input = np.concatenate((aug_pts_rect, ret_pts_features), axis=1)  # (N, C)
-        else:
-            pts_input = aug_pts_rect
-
-        if cfg.RPN.FIXED:
-            sample_info['pts_input'] = pts_input
-            sample_info['pts_rect'] = aug_pts_rect
-            #
-            sample_info['pts_features'] = ret_pts_features
-            sample_info['gt_boxes3d'] = aug_gt_boxes3d
-            return sample_info
-
-        # generate training labels
-        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
-        sample_info['pts_input'] = pts_input
-        sample_info['pts_rect'] = aug_pts_rect
-        sample_info['pts_features'] = ret_pts_features
-        sample_info['rpn_cls_label'] = rpn_cls_label
-        sample_info['rpn_reg_label'] = rpn_reg_label
-        sample_info['gt_boxes3d'] = aug_gt_boxes3d
-        return sample_info
-
 
 if __name__ == '__main__':
-    train_set = KittiRCNNDataset(root_dir="../../data",
-                                 npoints=16384,
-                                 split='train',
-                                 mode='TRAIN',
-                                 classes=cfg.CLASSES)
-    input_data = train_set[1]
-    input_channels = int(cfg.RPN.USE_INTENSITY) + 3 * int(cfg.RPN.USE_RGB)
-    from pointnet2_msg import Pointnet2MSG
-
-    net = Pointnet2MSG(input_channels=input_channels, use_xyz=True)
-
-    pts_input = torch.from_numpy(input_data['pts_input'])
-    img_input = torch.from_numpy(input_data['img'])
-    xy_input = torch.from_numpy(input_data['pts_origin_xy'])
-    backbone_xyz, backbone_features = net(pts_input, img_input, xy_input)
-    print(backbone_xyz, backbone_features)
+    root_dir = r'D:\code\EPNet\data'
+    root_dir = 'data'
+    dataset = KittiDataset(root_dir=root_dir, split="train")
+    print(dataset[1])
