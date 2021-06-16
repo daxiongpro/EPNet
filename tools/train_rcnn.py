@@ -61,11 +61,6 @@ if __name__ == "__main__":
 
     train_loader = create_dataloader()
     dataset = train_loader.dataset
-    # for i in range(5):
-    #     for key in dataset[i].keys():
-    #         if key != 'sample_id' and key != 'pts_features':
-    #             print(key, dataset[i][key].shape)
-    #     print()
 
     for cur_it, batch in enumerate(train_loader):
         print()
