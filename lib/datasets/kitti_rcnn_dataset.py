@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import os
 import pickle
@@ -33,8 +35,9 @@ def interpolate_img_by_xy(img, xy, normal_shape):
     return ret_img
 
 
-class KittiRCNNDataset(KittiDataset):
-    def __init__(self, root_dir,
+class KittiSSDDataset(KittiDataset):
+    def __init__(self,
+                 root_dir,
                  npoints=16384,
                  split='train',
                  classes='Car',
@@ -134,7 +137,7 @@ class KittiRCNNDataset(KittiDataset):
             #       (self.mode, len(self.sample_id_list), len(self.image_idx_list)))
 
     def preprocess_rpn_training_data(self):
-        """
+        """丢弃当前没有类的样本，这些类不会用于培训。
         Discard samples which don't have current classes, which will not be used for training.
         Valid sample_id is stored in self.sample_id_list
         """
@@ -428,8 +431,8 @@ class KittiRCNNDataset(KittiDataset):
 
         # generate training labels
         rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
-        sample_info['pts_input'] = pts_input# xyz_intensity坐标
-        sample_info['pts_rect'] = aug_pts_rect# 点云在相机坐标系下坐标 pts_rect: (N, 3)
+        sample_info['pts_input'] = pts_input  # xyz_intensity坐标
+        sample_info['pts_rect'] = aug_pts_rect  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
         sample_info['pts_features'] = ret_pts_features
         sample_info['rpn_cls_label'] = rpn_cls_label
         sample_info['rpn_reg_label'] = rpn_reg_label
@@ -789,104 +792,6 @@ class KittiRCNNDataset(KittiDataset):
             aug_method.append('flip')
 
         return aug_pts_rect, aug_gt_boxes3d, aug_method
-
-    def get_rcnn_sample_info(self, roi_info):
-        sample_id, gt_box3d = roi_info['sample_id'], roi_info['gt_box3d']
-        rpn_xyz, rpn_features, rpn_intensity, seg_mask = self.rpn_feature_list[sample_id]
-
-        # augmentation original roi by adding noise
-        roi_box3d = self.aug_roi_by_noise(roi_info)
-
-        # point cloud pooling based on roi_box3d
-        pooled_boxes3d = kitti_utils.enlarge_box3d(roi_box3d.reshape(1, 7), cfg.RCNN.POOL_EXTRA_WIDTH)
-
-        boxes_pts_mask_list = roipool3d_utils.pts_in_boxes3d_cpu(torch.from_numpy(rpn_xyz),
-                                                                 torch.from_numpy(pooled_boxes3d))
-        pt_mask_flag = (boxes_pts_mask_list[0].numpy() == 1)
-        cur_pts = rpn_xyz[pt_mask_flag].astype(np.float32)
-
-        # data augmentation
-        aug_pts = cur_pts.copy()
-        aug_gt_box3d = gt_box3d.copy().astype(np.float32)
-        aug_roi_box3d = roi_box3d.copy()
-        if cfg.AUG_DATA and self.mode == 'TRAIN':
-            # calculate alpha by ry
-            temp_boxes3d = np.concatenate([aug_roi_box3d.reshape(1, 7), aug_gt_box3d.reshape(1, 7)], axis=0)
-            temp_x, temp_z, temp_ry = temp_boxes3d[:, 0], temp_boxes3d[:, 2], temp_boxes3d[:, 6]
-            temp_beta = np.arctan2(temp_z, temp_x).astype(np.float64)
-            temp_alpha = -np.sign(temp_beta) * np.pi / 2 + temp_beta + temp_ry
-
-            # data augmentation
-            aug_pts, aug_boxes3d, aug_method = self.data_augmentation(aug_pts, temp_boxes3d, temp_alpha, mustaug=True,
-                                                                      stage=2)
-            aug_roi_box3d, aug_gt_box3d = aug_boxes3d[0], aug_boxes3d[1]
-            aug_gt_box3d = aug_gt_box3d.astype(gt_box3d.dtype)
-
-        # Pool input points
-        valid_mask = 1  # whether the input is valid
-
-        if aug_pts.shape[0] == 0:
-            pts_features = np.zeros((1, 128), dtype=np.float32)
-            input_channel = 3 + int(cfg.RCNN.USE_INTENSITY) + int(cfg.RCNN.USE_MASK) + int(cfg.RCNN.USE_DEPTH)
-            pts_input = np.zeros((1, input_channel), dtype=np.float32)
-            valid_mask = 0
-        else:
-            pts_features = rpn_features[pt_mask_flag].astype(np.float32)
-            pts_intensity = rpn_intensity[pt_mask_flag].astype(np.float32)
-
-            pts_input_list = [aug_pts, pts_intensity.reshape(-1, 1)]
-            if cfg.RCNN.USE_INTENSITY:
-                pts_input_list = [aug_pts, pts_intensity.reshape(-1, 1)]
-            else:
-                pts_input_list = [aug_pts]
-
-            if cfg.RCNN.USE_MASK:
-                if cfg.RCNN.MASK_TYPE == 'seg':
-                    pts_mask = seg_mask[pt_mask_flag].astype(np.float32)
-                elif cfg.RCNN.MASK_TYPE == 'roi':
-                    pts_mask = roipool3d_utils.pts_in_boxes3d_cpu(torch.from_numpy(aug_pts),
-                                                                  torch.from_numpy(aug_roi_box3d.reshape(1, 7)))
-                    pts_mask = (pts_mask[0].numpy() == 1).astype(np.float32)
-                else:
-                    raise NotImplementedError
-
-                pts_input_list.append(pts_mask.reshape(-1, 1))
-
-            if cfg.RCNN.USE_DEPTH:
-                pts_depth = np.linalg.norm(aug_pts, axis=1, ord=2)
-                pts_depth_norm = (pts_depth / 70.0) - 0.5
-                pts_input_list.append(pts_depth_norm.reshape(-1, 1))
-
-            pts_input = np.concatenate(pts_input_list, axis=1)  # (N, C)
-
-        aug_gt_corners = kitti_utils.boxes3d_to_corners3d(aug_gt_box3d.reshape(-1, 7))
-        aug_roi_corners = kitti_utils.boxes3d_to_corners3d(aug_roi_box3d.reshape(-1, 7))
-        iou3d = kitti_utils.get_iou3d(aug_roi_corners, aug_gt_corners)
-        cur_iou = iou3d[0][0]
-
-        # regression valid mask
-        reg_valid_mask = 1 if cur_iou >= cfg.RCNN.REG_FG_THRESH and valid_mask == 1 else 0
-
-        # classification label
-        cls_label = 1 if cur_iou > cfg.RCNN.CLS_FG_THRESH else 0
-        if cfg.RCNN.CLS_BG_THRESH < cur_iou < cfg.RCNN.CLS_FG_THRESH or valid_mask == 0:
-            cls_label = -1
-
-        # canonical transform and sampling
-        pts_input_ct, gt_box3d_ct = self.canonical_transform(pts_input, aug_roi_box3d, aug_gt_box3d)
-        pts_input_ct, pts_features = self.rcnn_input_sample(pts_input_ct, pts_features)
-
-        sample_info = {'sample_id': sample_id,
-                       'pts_input': pts_input_ct,
-                       'pts_features': pts_features,
-                       'cls_label': cls_label,
-                       'reg_valid_mask': reg_valid_mask,
-                       'gt_boxes3d_ct': gt_box3d_ct,
-                       'roi_boxes3d': aug_roi_box3d,
-                       'roi_size': aug_roi_box3d[3:6],
-                       'gt_boxes3d': aug_gt_box3d}
-
-        return sample_info
 
     @staticmethod
     def canonical_transform(pts_input, roi_box3d, gt_box3d):
@@ -1369,8 +1274,34 @@ class KittiRCNNDataset(KittiDataset):
         return ans_dict
 
 
+def create_logger():
+    root_result_dir = os.path.join(os.getcwd(), 'output')
+    log_file = os.path.join(root_result_dir, 'log_train.txt')
+
+    log_format = '%(asctime)s  %(levelname)5s  %(message)s'
+    logging.basicConfig(level=logging.DEBUG, format=log_format, filename=log_file)
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+    console.setFormatter(logging.Formatter(log_format))
+    logging.getLogger(__name__).addHandler(console)
+    return logging.getLogger(__name__)
+
+
 if __name__ == '__main__':
-    root_dir = r'D:\code\EPNet\data'
-    root_dir = 'data'
-    dataset = KittiDataset(root_dir=root_dir, split="train")
-    print(dataset[1])
+    # root_dir = r'D:\code\EPNet\data'
+    DATA_PATH = 'data'
+
+    logger = create_logger()
+
+    train_set = KittiSSDDataset(root_dir=DATA_PATH,
+                                npoints=cfg.RPN.NUM_POINTS,
+                                split=cfg.TRAIN.SPLIT,
+                                mode='TRAIN',
+                                logger=logger,
+                                classes=cfg.CLASSES)
+
+    item0 = train_set[0]
+    print(len(train_set))
+
+
+

@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from lib.net.PI_SSD import PISSD
-from lib.datasets.kitti_rcnn_dataset import KittiRCNNDataset
+from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
 import tools.train_utils.train_utils as train_utils
 from datasets.bbox_transform import decode_bbox_target
 from tools.kitti_object_eval_python.evaluate import evaluate as kitti_evaluate
@@ -923,12 +923,12 @@ def create_dataloader(logger):
     DATA_PATH = os.path.join('../', 'data')
 
     # create dataloader
-    test_set = KittiRCNNDataset(root_dir=DATA_PATH, npoints=cfg.RPN.NUM_POINTS, split=cfg.TEST.SPLIT, mode=mode,
-                                random_select=args.random_select,
-                                rcnn_eval_roi_dir=args.rcnn_eval_roi_dir,
-                                rcnn_eval_feature_dir=args.rcnn_eval_feature_dir,
-                                classes=cfg.CLASSES,
-                                logger=logger)
+    test_set = KittiSSDDataset(root_dir=DATA_PATH, npoints=cfg.RPN.NUM_POINTS, split=cfg.TEST.SPLIT, mode=mode,
+                               random_select=args.random_select,
+                               rcnn_eval_roi_dir=args.rcnn_eval_roi_dir,
+                               rcnn_eval_feature_dir=args.rcnn_eval_feature_dir,
+                               classes=cfg.CLASSES,
+                               logger=logger)
 
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, pin_memory=True,
                              num_workers=args.workers, collate_fn=test_set.collate_batch)

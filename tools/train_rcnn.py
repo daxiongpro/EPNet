@@ -1,8 +1,12 @@
+import logging
+import os
+
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import argparse
 from lib.config import cfg
+from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
 from tools.train_utils import train_utils
 
 from lib.datasets.kitti_dataset import KittiDataset
@@ -18,24 +22,44 @@ parser.add_argument("--rpn_ckpt", type=str, default=None, help="specify the well
 args = parser.parse_args()
 
 
+def create_logger():
+    root_result_dir = os.path.join(os.getcwd(), 'output')
+    log_file = os.path.join(root_result_dir, 'log_train.txt')
+
+    log_format = '%(asctime)s  %(levelname)5s  %(message)s'
+    logging.basicConfig(level=logging.DEBUG, format=log_format, filename=log_file)
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+    console.setFormatter(logging.Formatter(log_format))
+    logging.getLogger(__name__).addHandler(console)
+    return logging.getLogger(__name__)
+
+
 def create_dataloader():
+    logger = create_logger()
     DATA_PATH = 'data'
     # create dataloader
-    train_set = KittiDataset(root_dir=DATA_PATH, split='train', classes='Car')
+    train_set = KittiSSDDataset(root_dir=DATA_PATH,
+                                npoints=cfg.RPN.NUM_POINTS,
+                                split=cfg.TRAIN.SPLIT,
+                                mode='TRAIN',
+                                logger=logger,
+                                classes=cfg.CLASSES)
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, pin_memory=True,
-                              num_workers=args.workers, shuffle=True, collate_fn=train_set.collate_batch, drop_last=True)
+    train_loader = DataLoader(train_set,
+                              batch_size=args.batch_size,
+                              pin_memory=True,
+                              num_workers=args.workers,
+                              shuffle=True,
+                              collate_fn=train_set.collate_batch,
+                              drop_last=True)
 
-    test_set = KittiDataset(root_dir=DATA_PATH, split='train', classes='Car')
-
-    test_loader = DataLoader(test_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=args.workers)
-
-    return train_loader, test_loader
+    return train_loader
 
 
 if __name__ == "__main__":
 
-    train_loader, test_loader = create_dataloader()
+    train_loader = create_dataloader()
     dataset = train_loader.dataset
     # for i in range(5):
     #     for key in dataset[i].keys():
