@@ -107,27 +107,6 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
         self.pool_method = pool_method
 
 
-class PointnetSAModule(PointnetSAModuleMSG):
-    """Pointnet set abstraction layer"""
-
-    def __init__(self, *, mlp: List[int], npoint: int = None, radius: float = None, nsample: int = None,
-                 bn: bool = True, use_xyz: bool = True, pool_method='max_pool', instance_norm=False):
-        """
-        :param mlp: list of int, spec of the pointnet before the global max_pool
-        :param npoint: int, number of features
-        :param radius: float, radius of ball
-        :param nsample: int, number of samples in the ball query
-        :param bn: whether to use batchnorm
-        :param use_xyz:
-        :param pool_method: max_pool / avg_pool
-        :param instance_norm: whether to use instance_norm
-        """
-        super().__init__(
-            mlps=[mlp], npoint=npoint, radii=[radius], nsamples=[nsample], bn=bn, use_xyz=use_xyz,
-            pool_method=pool_method, instance_norm=instance_norm
-        )
-
-
 class PointnetFPModule(nn.Module):
     r"""Propagates the features of one set to another"""
 
