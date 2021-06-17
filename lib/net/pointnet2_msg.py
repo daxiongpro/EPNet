@@ -33,6 +33,9 @@ class BasicBlock(nn.Module):
 
 
 class Fusion_Conv(nn.Module):
+    """
+    将img 和point 直接拼接
+    """
     def __init__(self, inplanes, outplanes):
         super(Fusion_Conv, self).__init__()
 
@@ -49,6 +52,7 @@ class Fusion_Conv(nn.Module):
 
 # ================addition attention (add)=======================#
 class IA_Layer(nn.Module):
+    # image-attention 层。由图片和点云生成权值，乘到img特征上
     def __init__(self, channels):
         print('##############ADDITION ATTENTION(ADD)#########')
         super(IA_Layer, self).__init__()
@@ -62,6 +66,12 @@ class IA_Layer(nn.Module):
         self.fc3 = nn.Linear(rc, 1)
 
     def forward(self, img_feas, point_feas):
+        """
+        由图片和点云生成权值，乘到img特征上
+        @param img_feas: 图片特征
+        @param point_feas:点云特征
+        @return: 带w权值的图片特征
+        """
         batch = img_feas.size(0)
         img_feas_f = img_feas.transpose(1, 2).contiguous().view(-1, self.ic)  # BCN->BNC->(BN)C
         point_feas_f = point_feas.transpose(1, 2).contiguous().view(-1, self.pc)  # BCN->BNC->(BN)C'
@@ -102,7 +112,7 @@ class Atten_Fusion_Conv(nn.Module):
 
 
 def Feature_Gather(feature_map, xy):
-    """
+    """获取feature_map上 xy点的特征
     :param xy:(B,N,2)  normalize to [-1,1]
     :param feature_map:(B,C,H,W)
     :return:

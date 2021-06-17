@@ -129,7 +129,7 @@ class PointnetSAModule(PointnetSAModuleMSG):
 
 
 class PointnetFPModule(nn.Module):
-    r"""Propigates the features of one set to another"""
+    r"""Propagates the features of one set to another"""
 
     def __init__(self, *, mlp: List[int], bn: bool = True, activation=nn.ReLU(inplace=True)):
         """
