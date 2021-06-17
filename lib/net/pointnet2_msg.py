@@ -180,7 +180,8 @@ class Pointnet2MSG(nn.Module):
                 PointnetFPModule(mlp=[pre_channel + skip_channel_list[k]] + cfg.RPN.FP_MLPS[k])
             )
 
-    def _break_up_pc(self, pc):
+    @staticmethod
+    def _break_up_pc(pc):
         xyz = pc[..., 0:3].contiguous()
         features = (
             pc[..., 3:].transpose(1, 2).contiguous()
@@ -204,10 +205,12 @@ class Pointnet2MSG(nn.Module):
 
         if cfg.LI_FUSION.ENABLED:
             """
-            # normalize xy to [-1,1]
-            # x / W 取值范围(0, 1)
-            # x / W * 2 取值范围(0, 2)
-            # x / W * 2 -1 取值范围(-1, 1)
+            normalize xy to [-1,1]。为什么？
+            W为图片宽度
+            x / W 取值范围(0, 1)
+            x / W * 2 取值范围(0, 2)
+            x / W * 2 -1 取值范围(-1, 1)
+            y同理
             xy: (B, N, 2)
             """
             size_range = [1280.0, 384.0]
