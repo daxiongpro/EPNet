@@ -230,11 +230,40 @@ class Pointnet2MSG(nn.Module):
             img = [image]
 
         for i in range(len(self.SA_modules)):
+            # li_index（猜想） : 采样的点在原来的点云中的index
             li_xyz, li_features, li_index = self.SA_modules[i](l_xyz[i], l_features[i])
 
             if cfg.LI_FUSION.ENABLED:
                 li_index = li_index.long().unsqueeze(-1).repeat(1, 1, 2)
-                li_xy_cor = torch.gather(l_xy_cor[i], 1, li_index)
+                li_xy_cor = torch.gather(l_xy_cor[i], dim=1, index=li_index)
+                """
+                l_xy_cor[i]：上一层点云在img中的xy坐标
+                li_index：下一层点云在上一层点云中的位置index
+                返回：下一层点云在img中的xy坐标
+                """
+                """
+                torch.gather(input: Tensor, 
+                            dim: _int, 
+                            index: Tensor)
+                input :输入张量
+                dim在第几维上操作（不用理解）
+                index：收集的元素的索引
+                eg.
+                input = [
+                        [2, 3, 4, 5],
+                        [1, 4, 3],
+                        [4, 2, 2, 5, 7],
+                        [1]
+                    ]
+                length = torch.LongTensor([[4],[3],[5],[1]])
+                out = torch.gather(input, 1, length)
+                含义：第一行取第4个元素，第二行取第3个元素，第三行取第5个元素，第四行取第1个元素
+                >>> out
+                    tensor([[5],
+                            [3],
+                            [7],
+                            [1]])
+                """
                 image = self.Img_Block[i](img[i])
                 # print(image.shape)
                 # 获取点在图片上的特征。li_xy_cor为点的坐标

@@ -23,7 +23,7 @@ class _PointnetSAModuleBase(nn.Module):
         :param new_xyz:
         :return:
             new_xyz: (B, npoint, 3) tensor of the new features' xyz
-            new_features: (B, npoint, \sum_k(mlps[k][-1])) tensor of the new_features descriptors
+            new_features: (B, npoint, sum_k(mlps[k][-1])) tensor of the new_features descriptors
         """
         new_features_list = []
 
@@ -33,8 +33,6 @@ class _PointnetSAModuleBase(nn.Module):
         #         xyz_flipped,
         #         pointnet2_utils.furthest_point_sample(xyz, self.npoint)
         #     ).transpose(1, 2).contiguous() if self.npoint is not None else None
-
-        #
 
         if new_xyz is None:
             if self.npoint is not None:
