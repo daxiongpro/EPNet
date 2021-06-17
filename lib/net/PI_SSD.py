@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from lib.net.rpn import RPN
-# from lib.net.rcnn_net import RCNNNet
+from lib.net.rcnn_net import RCNNNet
 from lib.config import cfg
 
 
