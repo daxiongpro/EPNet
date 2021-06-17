@@ -26,19 +26,17 @@ class BasicBlock(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-
         out = self.conv2(out)
-
         return out
 
 
-class Fusion_Conv(nn.Module):
+class FusionConv(nn.Module):
     """
     将img 和point 直接拼接
     """
-    def __init__(self, inplanes, outplanes):
-        super(Fusion_Conv, self).__init__()
 
+    def __init__(self, inplanes, outplanes):
+        super(FusionConv, self).__init__()
         self.conv1 = torch.nn.Conv1d(inplanes, outplanes, 1)
         self.bn1 = torch.nn.BatchNorm1d(outplanes)
 
@@ -46,16 +44,15 @@ class Fusion_Conv(nn.Module):
         # print(point_features.shape, img_features.shape)
         fusion_features = torch.cat([point_features, img_features], dim=1)
         fusion_features = F.relu(self.bn1(self.conv1(fusion_features)))
-
         return fusion_features
 
 
 # ================addition attention (add)=======================#
-class IA_Layer(nn.Module):
+class ImageAttentionLayer(nn.Module):
     # image-attention 层。由图片和点云生成权值，乘到img特征上
     def __init__(self, channels):
         print('##############ADDITION ATTENTION(ADD)#########')
-        super(IA_Layer, self).__init__()
+        super(ImageAttentionLayer, self).__init__()
         self.ic, self.pc = channels
         rc = self.pc // 4
         self.conv1 = nn.Sequential(nn.Conv1d(self.ic, self.pc, 1),
@@ -81,54 +78,35 @@ class IA_Layer(nn.Module):
         att = F.sigmoid(self.fc3(F.tanh(ri + rp)))  # BNx1
         att = att.squeeze(1)
         att = att.view(batch, 1, -1)  # B1N
-        # print(img_feas.size(), att.size())
-
         img_feas_new = self.conv1(img_feas)
         out = img_feas_new * att
-
         return out
 
 
-class Atten_Fusion_Conv(nn.Module):
+class AttenFusionConv(nn.Module):
     def __init__(self, inplanes_I, inplanes_P, outplanes):
-        super(Atten_Fusion_Conv, self).__init__()
-
-        self.IA_Layer = IA_Layer(channels=[inplanes_I, inplanes_P])
-        # self.conv1 = torch.nn.Conv1d(inplanes_P, outplanes, 1)
+        super(AttenFusionConv, self).__init__()
+        self.IA_Layer = ImageAttentionLayer(channels=[inplanes_I, inplanes_P])
         self.conv1 = torch.nn.Conv1d(inplanes_P + inplanes_P, outplanes, 1)
         self.bn1 = torch.nn.BatchNorm1d(outplanes)
 
     def forward(self, point_features, img_features):
-        # print(point_features.shape, img_features.shape)
-
         img_features = self.IA_Layer(img_features, point_features)
-        # print("img_features:", img_features.shape)
-
-        # fusion_features = img_features + point_features
         fusion_features = torch.cat([point_features, img_features], dim=1)
         fusion_features = F.relu(self.bn1(self.conv1(fusion_features)))
-
         return fusion_features
 
 
-def Feature_Gather(feature_map, xy):
+def feature_gather(feature_map, xy):
     """获取feature_map上 xy点的特征
     :param xy:(B,N,2)  normalize to [-1,1]
     :param feature_map:(B,C,H,W)
     :return:
     """
-
-    # use grid_sample for this.
     # xy(B,N,2)->(B,1,N,2)
     xy = xy.unsqueeze(1)
-
     interpolate_feature = grid_sample(feature_map, xy)  # (B,C,1,N)
-
     return interpolate_feature.squeeze(2)  # (B,C,N)
-
-
-def get_model(input_channels=6, use_xyz=True):
-    return Pointnet2MSG(input_channels=input_channels, use_xyz=use_xyz)
 
 
 # 融合Lidar、点云特征
@@ -170,12 +148,12 @@ class Pointnet2MSG(nn.Module):
                     BasicBlock(cfg.LI_FUSION.IMG_CHANNELS[i], cfg.LI_FUSION.IMG_CHANNELS[i + 1], stride=1))
                 if cfg.LI_FUSION.ADD_Image_Attention:
                     self.Fusion_Conv.append(
-                        Atten_Fusion_Conv(cfg.LI_FUSION.IMG_CHANNELS[i + 1], cfg.LI_FUSION.POINT_CHANNELS[i],
-                                          cfg.LI_FUSION.POINT_CHANNELS[i]))
+                        AttenFusionConv(cfg.LI_FUSION.IMG_CHANNELS[i + 1], cfg.LI_FUSION.POINT_CHANNELS[i],
+                                        cfg.LI_FUSION.POINT_CHANNELS[i]))
                 else:
                     self.Fusion_Conv.append(
-                        Fusion_Conv(cfg.LI_FUSION.IMG_CHANNELS[i + 1] + cfg.LI_FUSION.POINT_CHANNELS[i],
-                                    cfg.LI_FUSION.POINT_CHANNELS[i]))
+                        FusionConv(cfg.LI_FUSION.IMG_CHANNELS[i + 1] + cfg.LI_FUSION.POINT_CHANNELS[i],
+                                   cfg.LI_FUSION.POINT_CHANNELS[i]))
 
                 self.DeConv.append(nn.ConvTranspose2d(cfg.LI_FUSION.IMG_CHANNELS[i + 1], cfg.LI_FUSION.DeConv_Reduce[i],
                                                       kernel_size=cfg.LI_FUSION.DeConv_Kernels[i],
@@ -186,11 +164,11 @@ class Pointnet2MSG(nn.Module):
             self.image_fusion_bn = torch.nn.BatchNorm2d(cfg.LI_FUSION.IMG_FEATURES_CHANNEL // 4)
 
             if cfg.LI_FUSION.ADD_Image_Attention:
-                self.final_fusion_img_point = Atten_Fusion_Conv(cfg.LI_FUSION.IMG_FEATURES_CHANNEL // 4,
-                                                                cfg.LI_FUSION.IMG_FEATURES_CHANNEL,
-                                                                cfg.LI_FUSION.IMG_FEATURES_CHANNEL)
+                self.final_fusion_img_point = AttenFusionConv(cfg.LI_FUSION.IMG_FEATURES_CHANNEL // 4,
+                                                              cfg.LI_FUSION.IMG_FEATURES_CHANNEL,
+                                                              cfg.LI_FUSION.IMG_FEATURES_CHANNEL)
             else:
-                self.final_fusion_img_point = Fusion_Conv(
+                self.final_fusion_img_point = FusionConv(
                     cfg.LI_FUSION.IMG_FEATURES_CHANNEL + cfg.LI_FUSION.IMG_FEATURES_CHANNEL // 4,
                     cfg.LI_FUSION.IMG_FEATURES_CHANNEL)
 
@@ -277,7 +255,7 @@ class Pointnet2MSG(nn.Module):
                 image = self.Img_Block[i](img[i])
                 # print(image.shape)
                 # 获取点在图片上的特征。li_xy_cor为点的坐标
-                img_gather_feature = Feature_Gather(image, li_xy_cor)
+                img_gather_feature = feature_gather(image, li_xy_cor)
 
                 li_features = self.Fusion_Conv[i](li_features, img_gather_feature)
                 l_xy_cor.append(li_xy_cor)
@@ -299,30 +277,7 @@ class Pointnet2MSG(nn.Module):
             de_concat = torch.cat(DeConv, dim=1)
 
             img_fusion = F.relu(self.image_fusion_bn(self.image_fusion_conv(de_concat)))
-            img_fusion_gather_feature = Feature_Gather(img_fusion, xy)
+            img_fusion_gather_feature = feature_gather(img_fusion, xy)
             l_features[0] = self.final_fusion_img_point(l_features[0], img_fusion_gather_feature)
 
         return l_xyz[0], l_features[0]
-
-
-class Pointnet2MSG_returnMiddleStages(Pointnet2MSG):
-    def __init__(self, input_channels=6, use_xyz=True):
-        super().__init__(input_channels, use_xyz)
-
-    def forward(self, pointcloud: torch.cuda.FloatTensor):
-        xyz, features = self._break_up_pc(pointcloud)
-
-        l_xyz, l_features = [xyz], [features]
-        idxs = []
-        for i in range(len(self.SA_modules)):
-            li_xyz, li_features, idx = self.SA_modules[i](l_xyz[i], l_features[i])
-            l_xyz.append(li_xyz)
-            l_features.append(li_features)
-            idxs.append(idx)
-
-        for i in range(-1, -(len(self.FP_modules) + 1), -1):
-            l_features[i - 1] = self.FP_modules[i](
-                l_xyz[i - 1], l_xyz[i], l_features[i - 1], l_features[i]
-            )
-
-        return l_xyz, l_features, idxs

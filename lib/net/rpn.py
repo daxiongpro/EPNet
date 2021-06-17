@@ -12,56 +12,12 @@ class RPN(nn.Module):
     def __init__(self, use_xyz=True, mode='TRAIN'):
         super().__init__()
         self.training_mode = (mode == 'TRAIN')
-
-        # MODEL = importlib.import_module(cfg.RPN.BACKBONE)
-        # self.backbone_net = MODEL.get_model(input_channels=int(cfg.RPN.USE_INTENSITY), use_xyz=use_xyz)
         input_channels = int(cfg.RPN.USE_INTENSITY) + 3 * int(cfg.RPN.USE_RGB)
-        if cfg.RPN.BACKBONE == 'pointnet2_msg':
-            self.backbone_net = Pointnet2MSG(input_channels=input_channels, use_xyz=use_xyz)
+        self.backbone_net = Pointnet2MSG(input_channels=input_channels, use_xyz=use_xyz)
 
-        # classification branch
-        cls_layers = []
-        pre_channel = cfg.RPN.FP_MLPS[0][-1]
-        for k in range(0, cfg.RPN.CLS_FC.__len__()):
-            cls_layers.append(pt_utils.Conv1d(pre_channel, cfg.RPN.CLS_FC[k], bn=cfg.RPN.USE_BN))
-            pre_channel = cfg.RPN.CLS_FC[k]
-        cls_layers.append(pt_utils.Conv1d(pre_channel, 1, activation=None))
-        if cfg.RPN.DP_RATIO >= 0:
-            cls_layers.insert(1, nn.Dropout(cfg.RPN.DP_RATIO))
-        self.rpn_cls_layer = nn.Sequential(*cls_layers)
+        self._init_weights()
 
-        # regression branch
-        per_loc_bin_num = int(cfg.RPN.LOC_SCOPE / cfg.RPN.LOC_BIN_SIZE) * 2
-        if cfg.RPN.LOC_XZ_FINE:
-            reg_channel = per_loc_bin_num * 4 + cfg.RPN.NUM_HEAD_BIN * 2 + 3
-        else:
-            reg_channel = per_loc_bin_num * 2 + cfg.RPN.NUM_HEAD_BIN * 2 + 3
-        reg_channel += 1  # reg y
-
-        reg_layers = []
-        pre_channel = cfg.RPN.FP_MLPS[0][-1]
-        for k in range(0, cfg.RPN.REG_FC.__len__()):
-            reg_layers.append(pt_utils.Conv1d(pre_channel, cfg.RPN.REG_FC[k], bn=cfg.RPN.USE_BN))
-            pre_channel = cfg.RPN.REG_FC[k]
-        reg_layers.append(pt_utils.Conv1d(pre_channel, reg_channel, activation=None))
-        if cfg.RPN.DP_RATIO >= 0:
-            reg_layers.insert(1, nn.Dropout(cfg.RPN.DP_RATIO))
-        self.rpn_reg_layer = nn.Sequential(*reg_layers)
-
-        if cfg.RPN.LOSS_CLS == 'DiceLoss':
-            self.rpn_cls_loss_func = loss_utils.DiceLoss(ignore_target=-1)
-        elif cfg.RPN.LOSS_CLS == 'SigmoidFocalLoss':
-            self.rpn_cls_loss_func = loss_utils.SigmoidFocalClassificationLoss(alpha=cfg.RPN.FOCAL_ALPHA[0],
-                                                                               gamma=cfg.RPN.FOCAL_GAMMA)
-        elif cfg.RPN.LOSS_CLS == 'BinaryCrossEntropy':
-            self.rpn_cls_loss_func = F.binary_cross_entropy
-        else:
-            raise NotImplementedError
-
-        self.proposal_layer = ProposalLayer(mode=mode)
-        self.init_weights()
-
-    def init_weights(self):
+    def _init_weights(self):
         if cfg.RPN.LOSS_CLS in ['SigmoidFocalLoss']:
             pi = 0.01
             nn.init.constant_(self.rpn_cls_layer[2].conv.bias, -np.log((1 - pi) / pi))
