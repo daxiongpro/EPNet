@@ -140,4 +140,4 @@ a.cuda()
 ###### 解决方法：
 
 原本环境为pytorch1.2，将pytorch换成1.5就行了
-
+https://github.com/sshaoshuai/Pointnet2.PyTorch/issues/19
