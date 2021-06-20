@@ -1,3 +1,4 @@
+import tools._init_path
 import logging
 import os
 
@@ -7,6 +8,7 @@ from torch.utils.data import DataLoader
 import argparse
 from lib.config import cfg
 from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
+from lib.net.PI_SSD import PISSD
 from tools.train_utils import train_utils
 
 from lib.datasets.kitti_dataset import KittiDataset
@@ -66,20 +68,20 @@ if __name__ == "__main__":
         print()
         print(batch)
 
-    # model = PISSD(num_classes=len(train_loader.dataset), use_xyz=True, mode='TRAIN')
-    # optimizer = optim.Adam(model.parameters(), lr=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.WEIGHT_DECAY)
-    #
-    # if args.mgpus:
-    #     model = nn.DataParallel(model)
-    # model.cuda()
-    #
-    # trainer = train_utils.Trainer(
-    #     model,
-    #     optimizer
-    # )
-    #
-    # trainer.train(
-    #     args.epochs,
-    #     train_loader,
-    #     test_loader
-    # )
+    model = PISSD(num_classes=len(train_loader.dataset), use_xyz=True, mode='TRAIN')
+    optimizer = optim.Adam(model.parameters(), lr=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.WEIGHT_DECAY)
+
+    if args.mgpus:
+        model = nn.DataParallel(model)
+    model.cuda()
+
+    trainer = train_utils.Trainer(
+        model,
+        optimizer
+    )
+
+    trainer.train(
+        args.epochs,
+        train_loader,
+        test_loader
+    )

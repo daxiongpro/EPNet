@@ -156,7 +156,7 @@ if __name__ == '__main__':
     #
     # dataset.generate_rgb_database()
     # # args.split=
-    dataset = GTDatabaseGenerator(root_dir='../../data/', split='train')
+    dataset = GTDatabaseGenerator(root_dir='../data/', split='train')
     dataset.vis_img()
 
     # gt_database = pickle.load(open('gt_database/train_gt_database.pkl', 'rb'))

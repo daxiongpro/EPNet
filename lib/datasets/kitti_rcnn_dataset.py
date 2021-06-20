@@ -8,6 +8,8 @@ import lib.datasets.kitti_utils as kitti_utils
 from lib.config import cfg
 from torch.nn.functional import grid_sample
 
+from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG
+
 
 def interpolate_img_by_xy(img, xy, normal_shape):
     """
@@ -572,4 +574,24 @@ if __name__ == '__main__':
                                 classes=cfg.CLASSES)
 
     item0 = train_set[0]
-    print(len(train_set))
+    print(item0)
+    pts = item0['pts_input']
+    pts = torch.tensor(pts).cuda()
+    net = PointnetSAModuleMSG(
+        npoint=4096,  # [4096, 1024, 256, 64]
+        radii=[0.1, 0.5],  # [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
+        nsamples=[16, 32],  # [[16, 32], [16, 32], [16, 32], [16, 32]]
+        mlps=[[16, 16, 32], [32, 32, 64]],  # mlps = cfg.RPN.SA_CONFIG.MLPS[k].copy()
+        use_xyz=True,
+        bn=True
+    )
+
+    B = 1
+    N = 5000
+    C = 16
+    xyz = pts[..., 0:3].contiguous().unsqueeze(0)
+    features = pts[..., 3:].contiguous().unsqueeze(0)
+    new_xyz = None
+
+
+    out = net(xyz, features, new_xyz)
