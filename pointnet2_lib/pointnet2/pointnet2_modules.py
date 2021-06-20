@@ -11,7 +11,7 @@ class _PointnetSAModuleBase(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.npoint = None
+        self.npoint = None  # 采样到的点的个数
         self.groupers = None
         self.mlps = None
         self.pool_method = 'max_pool'
@@ -28,19 +28,14 @@ class _PointnetSAModuleBase(nn.Module):
         new_features_list = []
 
         xyz_flipped = xyz.transpose(1, 2).contiguous()
-        # if new_xyz is None:
-        #     new_xyz = pointnet2_utils.gather_operation(
-        #         xyz_flipped,
-        #         pointnet2_utils.furthest_point_sample(xyz, self.npoint)
-        #     ).transpose(1, 2).contiguous() if self.npoint is not None else None
 
         if new_xyz is None:
             if self.npoint is not None:
-                idx = pointnet2_utils.furthest_point_sample(xyz, self.npoint)
+                idx = pointnet2_utils.furthest_point_sample(xyz, self.npoint)  # 最远点采样到的点所在原来的tensor的id
                 new_xyz = pointnet2_utils.gather_operation(
                     xyz_flipped,
                     idx
-                ).transpose(1, 2).contiguous()
+                ).transpose(1, 2).contiguous()  # new_xyz:最远点采样到的点
             else:
                 new_xyz = None
                 idx = None
@@ -48,9 +43,9 @@ class _PointnetSAModuleBase(nn.Module):
             idx = None
 
         for i in range(len(self.groupers)):
-            new_features = self.groupers[i](xyz, new_xyz, features)  # (B, C, npoint, nsample)
-            # print(new_features.size())
-            # print(features.size(), new_features.size())
+            # 以new_xyz为中心，r为半径，nsample为半径r的范围内点的个数的max。提取特征
+            # torch.Size([2, 19, 4096, 16]) (B, 3+C, npoint, nsample) 输入的features: (B, C, N)
+            new_features = self.groupers[i](xyz, new_xyz, features)
 
             new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample)
             if self.pool_method == 'max_pool':
