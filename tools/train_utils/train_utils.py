@@ -2,17 +2,16 @@ import logging
 import os
 import torch
 import torch.nn as nn
-import tqdm
-from torch.nn.utils import clip_grad_norm_
+from tqdm import tqdm, trange
 
 
 def checkpoint_state(model=None, optimizer=None, epoch=None, it=None):
     optim_state = optimizer.state_dict() if optimizer is not None else None
     if model is not None:
-        if isinstance(model, torch.nn.DataParallel):
-            model_state = model.module.state_dict()
-        else:
-            model_state = model.state_dict()
+        # if isinstance(model, torch.nn.DataParallel):
+        #     model_state = model.module.state_dict()
+        # else:
+        model_state = model.state_dict()
     else:
         model_state = None
 
@@ -86,9 +85,7 @@ class Trainer(object):
         # eval one epoch
         for i, data in tqdm.tqdm(enumerate(d_loader, 0), total=len(d_loader), leave=False, desc='val'):
             self.optimizer.zero_grad()
-
             loss, tb_dict, disp_dict = self.model_fn_eval(self.model, data)
-
             total_loss += loss.item()
             count += 1
             for k, v in tb_dict.items():
@@ -97,7 +94,6 @@ class Trainer(object):
         # statistics this epoch
         for k, v in eval_dict.items():
             eval_dict[k] = eval_dict[k] / max(count, 1)
-
         cur_performance = 0
         if 'recalled_cnt' in eval_dict:
             eval_dict['recall'] = eval_dict['recalled_cnt'] / max(eval_dict['gt_cnt'], 1)
@@ -113,23 +109,19 @@ class Trainer(object):
               n_epochs,
               train_loader,
               test_loader=None,
-              ckpt_save_interval=5,
-              lr_scheduler_each_iter=False  # 每个iter更新一遍lr
-              ):
+              ckpt_save_interval=5):
 
         it = start_it
 
-        for epoch in tqdm.trange(start_epoch, n_epochs, desc='epochs'):# trange(i)是tqdm(range(i))的一种简单写法
-            # 调整学习率、bn 暂时不调整
-
+        for epoch in trange(start_epoch, n_epochs, desc='epochs'):  # trange(i)是tqdm(range(i))的一种简单写法
+            # 调整学习率、bn
             # train one epoch
-            for cur_it, batch in enumerate(train_loader):
-                # 学习率更新
-                # 训练
+            for cur_it, batch in tqdm(enumerate(train_loader)):
+                # 学习率更新 && 训练
                 loss, tb_dict, disp_dict = self._train_it(batch)
                 it += 1
 
-            # 每个epoch存储一次
+            # 存储一次参数
             trained_epoch = epoch + 1
             if trained_epoch % ckpt_save_interval == 0:
                 ckpt_name = os.path.join(self.ckpt_dir, 'checkpoint_epoch_%d' % trained_epoch)
@@ -139,7 +131,7 @@ class Trainer(object):
                 )
 
             # eval one epoch
-            if (epoch % self.eval_frequency) == 0:
+            if epoch % self.eval_frequency == 0:
                 if test_loader is not None:
                     with torch.set_grad_enabled(False):
                         val_loss, eval_dict, cur_performance = self.eval_epoch(test_loader)
