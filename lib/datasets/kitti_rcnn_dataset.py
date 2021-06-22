@@ -40,10 +40,6 @@ class KittiSSDDataset(KittiDataset):
                  mode='TRAIN',
                  random_select=True,
                  logger=None,
-                 rcnn_training_roi_dir=None,
-                 rcnn_training_feature_dir=None,
-                 rcnn_eval_roi_dir=None,
-                 rcnn_eval_feature_dir=None,
                  gt_database_dir=None):
         super().__init__(root_dir=root_dir, split=split)
         if classes == 'Car':
@@ -80,11 +76,6 @@ class KittiSSDDataset(KittiDataset):
         self.pos_bbox_list = []
         self.neg_bbox_list = []
         self.far_neg_bbox_list = []
-        self.rcnn_eval_roi_dir = rcnn_eval_roi_dir
-        self.rcnn_eval_feature_dir = rcnn_eval_feature_dir
-        self.rcnn_training_roi_dir = rcnn_training_roi_dir
-        self.rcnn_training_feature_dir = rcnn_training_feature_dir
-
         self.gt_database = None
 
         if not self.random_select:
@@ -121,24 +112,6 @@ class KittiSSDDataset(KittiDataset):
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
             self.logger.info('Load testing samples from %s' % self.imageset_dir)
             self.logger.info('Done: total test samples %d' % len(self.sample_id_list))
-
-    def preprocess_rpn_training_data(self):
-        """丢弃当前没有类的样本，这些类不会用于培训。
-        Discard samples which don't have current classes, which will not be used for training.
-        Valid sample_id is stored in self.sample_id_list
-        """
-        self.logger.info('Loading %s samples from %s ...' % (self.mode, self.label_dir))
-        for idx in range(0, self.num_sample):
-            sample_id = int(self.image_idx_list[idx])
-            obj_list = self.filtrate_objects(self.get_label(sample_id))
-            # if cfg.LI_FUSION.ENABLED:  #####
-            if len(obj_list) == 0:
-                # self.logger.info('No gt classes: %06d' % sample_id)
-                continue
-            self.sample_id_list.append(sample_id)
-
-        self.logger.info('Done: filter %s results: %d / %d\n' % (self.mode, len(self.sample_id_list),
-                                                                 len(self.image_idx_list)))
 
     def get_label(self, idx):
         if idx < 10000:
@@ -220,6 +193,135 @@ class KittiSSDDataset(KittiDataset):
                          & (pts_z >= z_range[0]) & (pts_z <= z_range[1])
             pts_valid_flag = pts_valid_flag & range_flag
         return pts_valid_flag
+
+    @staticmethod
+    def generate_rpn_training_labels(pts_rect, gt_boxes3d):
+        """
+        判断pts_rect中的点是否在gt_boxes3d内部，如果是，则pts_rect对应的cls_label赋为对应的标签
+        :param pts_rect: 点云在img坐标系的坐标
+        :param gt_boxes3d: img坐标系下的回归框
+        :return:
+        cls_label:(N, 1)
+        reg_label:(N, 7)
+        """
+        cls_label = np.zeros((pts_rect.shape[0]), dtype=np.int32)
+        reg_label = np.zeros((pts_rect.shape[0], 7), dtype=np.float32)  # dx, dy, dz, ry, h, w, l
+        gt_corners = kitti_utils.boxes3d_to_corners3d(gt_boxes3d, rotate=True)
+        extend_gt_boxes3d = kitti_utils.enlarge_box3d(gt_boxes3d, extra_width=0.2)
+        extend_gt_corners = kitti_utils.boxes3d_to_corners3d(extend_gt_boxes3d, rotate=True)
+        for k in range(gt_boxes3d.shape[0]):
+            box_corners = gt_corners[k]
+            fg_pt_flag = kitti_utils.in_hull(pts_rect, box_corners)
+            fg_pts_rect = pts_rect[fg_pt_flag]
+            cls_label[fg_pt_flag] = 1
+
+            # enlarge the bbox3d, ignore nearby points
+            extend_box_corners = extend_gt_corners[k]
+            fg_enlarge_flag = kitti_utils.in_hull(pts_rect, extend_box_corners)
+            ignore_flag = np.logical_xor(fg_pt_flag, fg_enlarge_flag)
+            cls_label[ignore_flag] = -1
+
+            # pixel offset of object center
+            center3d = gt_boxes3d[k][0:3].copy()  # (x, y, z)
+            center3d[1] -= gt_boxes3d[k][3] / 2
+            reg_label[fg_pt_flag, 0:3] = center3d - fg_pts_rect  # Now y is the true center of 3d box 20180928
+
+            # size and angle encoding
+            reg_label[fg_pt_flag, 3] = gt_boxes3d[k][3]  # h
+            reg_label[fg_pt_flag, 4] = gt_boxes3d[k][4]  # w
+            reg_label[fg_pt_flag, 5] = gt_boxes3d[k][5]  # l
+            reg_label[fg_pt_flag, 6] = gt_boxes3d[k][6]  # ry
+
+        return cls_label, reg_label
+
+    def rotate_box3d_along_y(self, box3d, rot_angle):
+        old_x, old_z, ry = box3d[0], box3d[2], box3d[6]
+        old_beta = np.arctan2(old_z, old_x)
+        alpha = -np.sign(old_beta) * np.pi / 2 + old_beta + ry
+
+        box3d = kitti_utils.rotate_pc_along_y(box3d.reshape(1, 7), rot_angle=rot_angle)[0]
+        new_x, new_z = box3d[0], box3d[2]
+        new_beta = np.arctan2(new_z, new_x)
+        box3d[6] = np.sign(new_beta) * np.pi / 2 + alpha - new_beta
+
+        return box3d
+
+    def data_augmentation(self, aug_pts_rect, aug_gt_boxes3d, gt_alpha, sample_id=None, mustaug=False, stage=1):
+        """
+        :param aug_pts_rect: (N, 3)
+        :param aug_gt_boxes3d: (N, 7)
+        :param gt_alpha: (N)
+        :return:
+        """
+        aug_list = cfg.AUG_METHOD_LIST
+        aug_enable = 1 - np.random.rand(3)
+        if mustaug is True:
+            aug_enable[0] = -1
+            aug_enable[1] = -1
+        aug_method = []
+        if 'rotation' in aug_list and aug_enable[0] < cfg.AUG_METHOD_PROB[0]:
+            angle = np.random.uniform(-np.pi / cfg.AUG_ROT_RANGE, np.pi / cfg.AUG_ROT_RANGE)
+            aug_pts_rect = kitti_utils.rotate_pc_along_y(aug_pts_rect, rot_angle=angle)
+            if stage == 1:
+                # xyz change, hwl unchange
+                aug_gt_boxes3d = kitti_utils.rotate_pc_along_y(aug_gt_boxes3d, rot_angle=angle)
+
+                # calculate the ry after rotation
+                x, z = aug_gt_boxes3d[:, 0], aug_gt_boxes3d[:, 2]
+                beta = np.arctan2(z, x)
+                new_ry = np.sign(beta) * np.pi / 2 + gt_alpha - beta
+                aug_gt_boxes3d[:, 6] = new_ry  # TODO: not in [-np.pi / 2, np.pi / 2]
+            elif stage == 2:
+                # for debug stage-2, this implementation has little float precision difference with the above one
+                assert aug_gt_boxes3d.shape[0] == 2
+                aug_gt_boxes3d[0] = self.rotate_box3d_along_y(aug_gt_boxes3d[0], angle)
+                aug_gt_boxes3d[1] = self.rotate_box3d_along_y(aug_gt_boxes3d[1], angle)
+            else:
+                raise NotImplementedError
+
+            aug_method.append(['rotation', angle])
+
+        if 'scaling' in aug_list and aug_enable[1] < cfg.AUG_METHOD_PROB[1]:
+            scale = np.random.uniform(0.95, 1.05)
+            aug_pts_rect = aug_pts_rect * scale
+            aug_gt_boxes3d[:, 0:6] = aug_gt_boxes3d[:, 0:6] * scale
+            aug_method.append(['scaling', scale])
+
+        if 'flip' in aug_list and aug_enable[2] < cfg.AUG_METHOD_PROB[2]:
+            # flip horizontal
+            aug_pts_rect[:, 0] = -aug_pts_rect[:, 0]
+            aug_gt_boxes3d[:, 0] = -aug_gt_boxes3d[:, 0]
+            # flip orientation: ry > 0: pi - ry, ry < 0: -pi - ry
+            if stage == 1:
+                aug_gt_boxes3d[:, 6] = np.sign(aug_gt_boxes3d[:, 6]) * np.pi - aug_gt_boxes3d[:, 6]
+            elif stage == 2:
+                assert aug_gt_boxes3d.shape[0] == 2
+                aug_gt_boxes3d[0, 6] = np.sign(aug_gt_boxes3d[0, 6]) * np.pi - aug_gt_boxes3d[0, 6]
+                aug_gt_boxes3d[1, 6] = np.sign(aug_gt_boxes3d[1, 6]) * np.pi - aug_gt_boxes3d[1, 6]
+            else:
+                raise NotImplementedError
+
+            aug_method.append('flip')
+
+        return aug_pts_rect, aug_gt_boxes3d, aug_method
+
+    def __len__(self):
+        if cfg.RPN.ENABLED:
+            return len(self.sample_id_list)
+        elif cfg.RCNN.ENABLED:
+            if self.mode == 'TRAIN':
+                return len(self.sample_id_list)
+            else:
+                return len(self.image_idx_list)
+        else:
+            raise NotImplementedError
+
+    def __getitem__(self, index):
+        if cfg.LI_FUSION.ENABLED:
+            return self.get_rpn_with_li_fusion(index)
+
+        else:
+            raise NotImplementedError
 
     def get_rpn_with_li_fusion(self, index):
         """获取单个样本
@@ -361,149 +463,6 @@ class KittiSSDDataset(KittiDataset):
         sample_info['gt_boxes3d'] = aug_gt_boxes3d
         return sample_info
 
-    @staticmethod
-    def generate_rpn_training_labels(pts_rect, gt_boxes3d):
-        """
-        判断pts_rect中的点是否在gt_boxes3d内部，如果是，则pts_rect对应的cls_label赋为对应的标签
-        :param pts_rect: 点云在img坐标系的坐标
-        :param gt_boxes3d: img坐标系下的回归框
-        :return:
-        cls_label:(N, 1)
-        reg_label:(N, 7)
-        """
-        cls_label = np.zeros((pts_rect.shape[0]), dtype=np.int32)
-        reg_label = np.zeros((pts_rect.shape[0], 7), dtype=np.float32)  # dx, dy, dz, ry, h, w, l
-        gt_corners = kitti_utils.boxes3d_to_corners3d(gt_boxes3d, rotate=True)
-        extend_gt_boxes3d = kitti_utils.enlarge_box3d(gt_boxes3d, extra_width=0.2)
-        extend_gt_corners = kitti_utils.boxes3d_to_corners3d(extend_gt_boxes3d, rotate=True)
-        for k in range(gt_boxes3d.shape[0]):
-            box_corners = gt_corners[k]
-            fg_pt_flag = kitti_utils.in_hull(pts_rect, box_corners)
-            fg_pts_rect = pts_rect[fg_pt_flag]
-            cls_label[fg_pt_flag] = 1
-
-            # enlarge the bbox3d, ignore nearby points
-            extend_box_corners = extend_gt_corners[k]
-            fg_enlarge_flag = kitti_utils.in_hull(pts_rect, extend_box_corners)
-            ignore_flag = np.logical_xor(fg_pt_flag, fg_enlarge_flag)
-            cls_label[ignore_flag] = -1
-
-            # pixel offset of object center
-            center3d = gt_boxes3d[k][0:3].copy()  # (x, y, z)
-            center3d[1] -= gt_boxes3d[k][3] / 2
-            reg_label[fg_pt_flag, 0:3] = center3d - fg_pts_rect  # Now y is the true center of 3d box 20180928
-
-            # size and angle encoding
-            reg_label[fg_pt_flag, 3] = gt_boxes3d[k][3]  # h
-            reg_label[fg_pt_flag, 4] = gt_boxes3d[k][4]  # w
-            reg_label[fg_pt_flag, 5] = gt_boxes3d[k][5]  # l
-            reg_label[fg_pt_flag, 6] = gt_boxes3d[k][6]  # ry
-
-        return cls_label, reg_label
-
-    def rotate_box3d_along_y(self, box3d, rot_angle):
-        old_x, old_z, ry = box3d[0], box3d[2], box3d[6]
-        old_beta = np.arctan2(old_z, old_x)
-        alpha = -np.sign(old_beta) * np.pi / 2 + old_beta + ry
-
-        box3d = kitti_utils.rotate_pc_along_y(box3d.reshape(1, 7), rot_angle=rot_angle)[0]
-        new_x, new_z = box3d[0], box3d[2]
-        new_beta = np.arctan2(new_z, new_x)
-        box3d[6] = np.sign(new_beta) * np.pi / 2 + alpha - new_beta
-
-        return box3d
-
-    def data_augmentation(self, aug_pts_rect, aug_gt_boxes3d, gt_alpha, sample_id=None, mustaug=False, stage=1):
-        """
-        :param aug_pts_rect: (N, 3)
-        :param aug_gt_boxes3d: (N, 7)
-        :param gt_alpha: (N)
-        :return:
-        """
-        aug_list = cfg.AUG_METHOD_LIST
-        aug_enable = 1 - np.random.rand(3)
-        if mustaug is True:
-            aug_enable[0] = -1
-            aug_enable[1] = -1
-        aug_method = []
-        if 'rotation' in aug_list and aug_enable[0] < cfg.AUG_METHOD_PROB[0]:
-            angle = np.random.uniform(-np.pi / cfg.AUG_ROT_RANGE, np.pi / cfg.AUG_ROT_RANGE)
-            aug_pts_rect = kitti_utils.rotate_pc_along_y(aug_pts_rect, rot_angle=angle)
-            if stage == 1:
-                # xyz change, hwl unchange
-                aug_gt_boxes3d = kitti_utils.rotate_pc_along_y(aug_gt_boxes3d, rot_angle=angle)
-
-                # calculate the ry after rotation
-                x, z = aug_gt_boxes3d[:, 0], aug_gt_boxes3d[:, 2]
-                beta = np.arctan2(z, x)
-                new_ry = np.sign(beta) * np.pi / 2 + gt_alpha - beta
-                aug_gt_boxes3d[:, 6] = new_ry  # TODO: not in [-np.pi / 2, np.pi / 2]
-            elif stage == 2:
-                # for debug stage-2, this implementation has little float precision difference with the above one
-                assert aug_gt_boxes3d.shape[0] == 2
-                aug_gt_boxes3d[0] = self.rotate_box3d_along_y(aug_gt_boxes3d[0], angle)
-                aug_gt_boxes3d[1] = self.rotate_box3d_along_y(aug_gt_boxes3d[1], angle)
-            else:
-                raise NotImplementedError
-
-            aug_method.append(['rotation', angle])
-
-        if 'scaling' in aug_list and aug_enable[1] < cfg.AUG_METHOD_PROB[1]:
-            scale = np.random.uniform(0.95, 1.05)
-            aug_pts_rect = aug_pts_rect * scale
-            aug_gt_boxes3d[:, 0:6] = aug_gt_boxes3d[:, 0:6] * scale
-            aug_method.append(['scaling', scale])
-
-        if 'flip' in aug_list and aug_enable[2] < cfg.AUG_METHOD_PROB[2]:
-            # flip horizontal
-            aug_pts_rect[:, 0] = -aug_pts_rect[:, 0]
-            aug_gt_boxes3d[:, 0] = -aug_gt_boxes3d[:, 0]
-            # flip orientation: ry > 0: pi - ry, ry < 0: -pi - ry
-            if stage == 1:
-                aug_gt_boxes3d[:, 6] = np.sign(aug_gt_boxes3d[:, 6]) * np.pi - aug_gt_boxes3d[:, 6]
-            elif stage == 2:
-                assert aug_gt_boxes3d.shape[0] == 2
-                aug_gt_boxes3d[0, 6] = np.sign(aug_gt_boxes3d[0, 6]) * np.pi - aug_gt_boxes3d[0, 6]
-                aug_gt_boxes3d[1, 6] = np.sign(aug_gt_boxes3d[1, 6]) * np.pi - aug_gt_boxes3d[1, 6]
-            else:
-                raise NotImplementedError
-
-            aug_method.append('flip')
-
-        return aug_pts_rect, aug_gt_boxes3d, aug_method
-
-    def __len__(self):
-        if cfg.RPN.ENABLED:
-            return len(self.sample_id_list)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                return len(self.sample_id_list)
-            else:
-                return len(self.image_idx_list)
-        else:
-            raise NotImplementedError
-
-    def __getitem__(self, index):
-        if cfg.LI_FUSION.ENABLED:
-            return self.get_rpn_with_li_fusion(index)
-
-        if cfg.RPN.ENABLED:
-            pass
-            # return self.get_rpn_sample(index)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                if cfg.RCNN.ROI_SAMPLE_JIT:
-                    pass
-                    # return self.get_rcnn_sample_jit(index)
-                else:
-                    pass
-                    # return self.get_rcnn_training_sample_batch(index)
-            else:
-                pass
-                # return self.get_proposal_from_file(index)
-        else:
-            raise NotImplementedError
-
     def collate_batch(self, batch):
         """
         用在创建Dataloader里面，collate_fn=collate_batch
@@ -592,6 +551,5 @@ if __name__ == '__main__':
     xyz = pts[..., 0:3].contiguous().unsqueeze(0)
     features = pts[..., 3:].contiguous().unsqueeze(0)
     new_xyz = None
-
 
     out = net(xyz, features, new_xyz)
