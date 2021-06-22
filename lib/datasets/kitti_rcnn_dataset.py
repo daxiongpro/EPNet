@@ -39,7 +39,6 @@ class KittiSSDDataset(KittiDataset):
                  classes='Car',
                  mode='TRAIN',
                  random_select=True,
-                 logger=None,
                  gt_database_dir=None):
         super().__init__(root_dir=root_dir, split=split)
         if classes == 'Car':
@@ -61,25 +60,10 @@ class KittiSSDDataset(KittiDataset):
         self.npoints = npoints
         self.sample_id_list = []
         self.random_select = random_select
-        self.logger = logger
 
-        if split == 'train_aug':
-            self.aug_label_dir = os.path.join(aug_scene_root_dir, 'training', 'aug_label')
-            self.aug_pts_dir = os.path.join(aug_scene_root_dir, 'training', 'rectified_data')
-        else:
-            self.aug_label_dir = os.path.join(aug_scene_root_dir, 'training', 'aug_label')
-            self.aug_pts_dir = os.path.join(aug_scene_root_dir, 'training', 'rectified_data')
-
-        # for rcnn training
-        self.rcnn_training_bbox_list = []
-        self.rpn_feature_list = {}
-        self.pos_bbox_list = []
-        self.neg_bbox_list = []
-        self.far_neg_bbox_list = []
+        self.aug_label_dir = os.path.join(aug_scene_root_dir, 'training', 'aug_label')
+        self.aug_pts_dir = os.path.join(aug_scene_root_dir, 'training', 'rectified_data')
         self.gt_database = None
-
-        if not self.random_select:
-            self.logger.warning('random select is False')
 
         assert mode in ['TRAIN', 'EVAL', 'TEST'], 'Invalid mode: %s' % mode
         self.mode = mode
@@ -97,21 +81,26 @@ class KittiSSDDataset(KittiDataset):
                         else:
                             hard_list.append(obj)
                     self.gt_database = [easy_list, hard_list]
-                    logger.info('Loading gt_database(easy(pt_num>100): %d, hard(pt_num<=100): %d) from %s'
-                                % (len(easy_list), len(hard_list), gt_database_dir))
-                else:
-                    logger.info('Loading gt_database(%d) from %s' % (len(self.gt_database), gt_database_dir))
-
             if mode == 'TRAIN':
                 self.preprocess_rpn_training_data()
             else:
                 self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
-                self.logger.info('Load testing samples from %s' % self.imageset_dir)
-                self.logger.info('Done: total test samples %d' % len(self.sample_id_list))
         elif cfg.RCNN.ENABLED:
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
-            self.logger.info('Load testing samples from %s' % self.imageset_dir)
-            self.logger.info('Done: total test samples %d' % len(self.sample_id_list))
+
+    def preprocess_rpn_training_data(self):
+        """
+        Discard samples which don't have current classes, which will not be used for training.
+        Valid sample_id is stored in self.sample_id_list
+        """
+        for idx in range(0, self.num_sample):
+            sample_id = int(self.image_idx_list[idx])
+            obj_list = self.filtrate_objects(self.get_label(sample_id))
+            # if cfg.LI_FUSION.ENABLED:  #####
+            if len(obj_list) == 0:
+                # self.logger.info('No gt classes: %06d' % sample_id)
+                continue
+            self.sample_id_list.append(sample_id)
 
     def get_label(self, idx):
         if idx < 10000:
@@ -211,8 +200,8 @@ class KittiSSDDataset(KittiDataset):
         extend_gt_corners = kitti_utils.boxes3d_to_corners3d(extend_gt_boxes3d, rotate=True)
         for k in range(gt_boxes3d.shape[0]):
             box_corners = gt_corners[k]
-            fg_pt_flag = kitti_utils.in_hull(pts_rect, box_corners)
-            fg_pts_rect = pts_rect[fg_pt_flag]
+            fg_pt_flag = kitti_utils.in_hull(pts_rect, box_corners)  # (N,)
+            fg_pts_rect = pts_rect[fg_pt_flag]  # 在box里面的点
             cls_label[fg_pt_flag] = 1
 
             # enlarge the bbox3d, ignore nearby points
@@ -223,7 +212,7 @@ class KittiSSDDataset(KittiDataset):
 
             # pixel offset of object center
             center3d = gt_boxes3d[k][0:3].copy()  # (x, y, z)
-            center3d[1] -= gt_boxes3d[k][3] / 2
+            center3d[1] -= gt_boxes3d[k][3] / 2  # y=y-h/2
             reg_label[fg_pt_flag, 0:3] = center3d - fg_pts_rect  # Now y is the true center of 3d box 20180928
 
             # size and angle encoding
@@ -238,12 +227,10 @@ class KittiSSDDataset(KittiDataset):
         old_x, old_z, ry = box3d[0], box3d[2], box3d[6]
         old_beta = np.arctan2(old_z, old_x)
         alpha = -np.sign(old_beta) * np.pi / 2 + old_beta + ry
-
         box3d = kitti_utils.rotate_pc_along_y(box3d.reshape(1, 7), rot_angle=rot_angle)[0]
         new_x, new_z = box3d[0], box3d[2]
         new_beta = np.arctan2(new_z, new_x)
         box3d[6] = np.sign(new_beta) * np.pi / 2 + alpha - new_beta
-
         return box3d
 
     def data_augmentation(self, aug_pts_rect, aug_gt_boxes3d, gt_alpha, sample_id=None, mustaug=False, stage=1):
@@ -317,55 +304,39 @@ class KittiSSDDataset(KittiDataset):
             raise NotImplementedError
 
     def __getitem__(self, index):
-        if cfg.LI_FUSION.ENABLED:
-            return self.get_rpn_with_li_fusion(index)
-
-        else:
-            raise NotImplementedError
-
-    def get_rpn_with_li_fusion(self, index):
-        """获取单个样本
+        """获取单个样本。每个值都是numpy类型。
         @param index: (int)
         @return: sample_info (dict):
         dict_keys([
+        ----------------------------------------------配置参数
         'sample_id',
         'random_select',
-        'img',
-        'pts_origin_xy',
         'aug_method',
-        'pts_input',
-        'pts_rect',
-        'pts_features',
-        'rpn_cls_label',
-        'rpn_reg_label',
-        'gt_boxes3d'
+        -----------------------------------------------图片：
+        'img',
+        -----------------------------------------------点云：
+        'pts_origin_xy',点云在图像上对应的xy (N,2)
+        'pts_input',点云原始输入(N, 3+C)，其中包含了pts_rect
+        'pts_rect',点云在相机坐标系下的坐标(N, 3)
+        'pts_features',输入的点云特征，初始为光照强度
+        ----------------------------------------------label：
+        'rpn_cls_label',分类标签
+        'rpn_reg_label',回归标签(N,7)。判断这N 个点是否在box内部，若是则是这个点对应的box回归值
+        'gt_boxes3d'真实回归标签(1,7)
         ])
         """
         sample_id = int(self.sample_id_list[index])
-        if sample_id < 10000:
-            calib = self.get_calib(sample_id)
-            img = self.get_image_rgb_with_normal(sample_id)
-            img_shape = self.get_image_shape(sample_id)
-            pts_lidar = self.get_lidar(sample_id)
+        # 不做数据增强。# if sample_id < 10000:
+        calib = self.get_calib(sample_id)
+        img = self.get_image_rgb_with_normal(sample_id)
+        pts_lidar = self.get_lidar(sample_id)
 
-            # get valid point (projected points should be in image)
-            pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标
-            pts_intensity = pts_lidar[:, 3]
-
-        else:
-            assert False, print('unable to use aug data with img align')
-            calib = self.get_calib(sample_id % 10000)
-            # img = self.get_image_by_python(sample_id % 10000)
-            img_shape = self.get_image_shape(sample_id % 10000)
-
-            pts_file = os.path.join(self.aug_pts_dir, '%06d.bin' % sample_id)
-            assert os.path.exists(pts_file), '%s' % pts_file
-            aug_pts = np.fromfile(pts_file, dtype=np.float32).reshape(-1, 4)
-            pts_rect, pts_intensity = aug_pts[:, 0:3], aug_pts[:, 3]
-
-        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云投影到深度图，深度图的深度
+        # get valid point (projected points should be in image)
+        pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标(N,3)
+        pts_intensity = pts_lidar[:, 3]
+        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云投影到深度图(N,2)，深度图的深度
+        img_shape = self.get_image_shape(sample_id)
         pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
-
         pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
         """
         >>> a = np.array([1, 2, 3])
@@ -377,42 +348,41 @@ class KittiSSDDataset(KittiDataset):
         pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
 
         # generate inputs
-        if self.mode == 'TRAIN' or self.random_select:
-            # make sure len(pts_rect) ==self.npoints
-            if self.npoints < len(pts_rect):
-                pts_depth = pts_rect[:, 2]
-                pts_near_flag = pts_depth < 40.0
-                far_idxs_choice = np.where(pts_near_flag == 0)[0]
-                near_idxs = np.where(pts_near_flag == 1)[0]
-                near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice), replace=False)
+        # 选取16384个点
+        # make sure len(pts_rect) ==self.npoints
+        if self.npoints < len(pts_rect):
+            pts_depth = pts_rect[:, 2]  # (N,1)
+            pts_near_flag = pts_depth < 40.0
+            far_idxs_choice = np.where(pts_near_flag == 0)[0]  # 远的点都要
+            near_idxs = np.where(pts_near_flag == 1)[0]
+            near_idxs_choice = np.random.choice(near_idxs, self.npoints - len(far_idxs_choice),
+                                                replace=False)  # 近的点选取部分
 
-                choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
-                    if len(far_idxs_choice) > 0 else near_idxs_choice
-                np.random.shuffle(choice)
-            else:
-                choice = np.arange(0, len(pts_rect), dtype=np.int32)
-                if self.npoints > len(pts_rect):
-                    extra_choice = np.random.choice(choice, self.npoints - len(pts_rect), replace=False)
-                    choice = np.concatenate((choice, extra_choice), axis=0)
-                np.random.shuffle(choice)
+            choice = np.concatenate((near_idxs_choice, far_idxs_choice), axis=0) \
+                if len(far_idxs_choice) > 0 else near_idxs_choice
+            np.random.shuffle(choice)  # 打乱
+        else:  # 点的数量不够16384
+            choice = np.arange(0, len(pts_rect), dtype=np.int32)  # 原来的点全要，还要再补一些点
+            extra_choice = np.random.choice(choice, self.npoints - len(pts_rect),
+                                            replace=False)  # 随机从原来的点中取一些点补上
+            choice = np.concatenate((choice, extra_choice), axis=0)
+            np.random.shuffle(choice)
 
-            ret_pts_rect = pts_rect[choice, :]
-            ret_pts_intensity = pts_intensity[choice] - 0.5  # translate intensity to [-0.5, 0.5]
-            ret_pts_origin_xy = pts_origin_xy[choice, :]
-        else:
-            ret_pts_rect = pts_rect
-            ret_pts_intensity = pts_intensity - 0.5
-            ret_pts_origin_xy = pts_origin_xy[choice, :]
+        ret_pts_rect = pts_rect[choice, :]  # (N,3)
+        ret_pts_intensity = pts_intensity[choice] - 0.5  # translate intensity to [-0.5, 0.5]
+        ret_pts_origin_xy = pts_origin_xy[choice, :]
 
-        pts_features = [ret_pts_intensity.reshape(-1, 1)]
-        ret_pts_features = np.concatenate(pts_features, axis=1) if pts_features.__len__() > 1 else pts_features[0]
+        pts_features = [ret_pts_intensity.reshape(-1, 1)]  # 列表，列表每个元素为(N,1)，代表一种特征。初始点云的特征为强度
+        ret_pts_features = np.concatenate(pts_features, axis=1) \
+            if pts_features.__len__() > 1 else pts_features[0]  # 将特征拼接起来(N,C)
 
-        sample_info = {'sample_id': sample_id, 'random_select': self.random_select, 'img': img,
+        sample_info = {'sample_id': sample_id, 'random_select': self.random_select,
+                       'img': img,
                        'pts_origin_xy': ret_pts_origin_xy}
 
-        if self.mode == 'TEST':
+        if self.mode == 'TEST':  # 如果是TEST，则不用数据增强和标签
             if cfg.RPN.USE_INTENSITY:
-                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, C)
+                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, 3+C)
             else:
                 pts_input = ret_pts_rect
             sample_info['pts_input'] = pts_input
@@ -422,11 +392,8 @@ class KittiSSDDataset(KittiDataset):
             return sample_info
 
         gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
-        # if cfg.GT_AUG_ENABLED and self.mode == 'TRAIN' and gt_aug_flag:
-        #     gt_obj_list.extend(extra_gt_obj_list)
         gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)
-
-        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)
+        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)  # 旋转角度
         for k, obj in enumerate(gt_obj_list):
             gt_alpha[k] = obj.alpha
 
@@ -434,7 +401,6 @@ class KittiSSDDataset(KittiDataset):
         aug_pts_rect = ret_pts_rect.copy()
         aug_gt_boxes3d = gt_boxes3d.copy()
         if cfg.AUG_DATA and self.mode == 'TRAIN':
-            #
             aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(aug_pts_rect, aug_gt_boxes3d, gt_alpha,
                                                                               sample_id)
             sample_info['aug_method'] = aug_method
@@ -445,10 +411,9 @@ class KittiSSDDataset(KittiDataset):
         else:
             pts_input = aug_pts_rect
 
-        if cfg.RPN.FIXED:
+        if cfg.RPN.FIXED:  # False
             sample_info['pts_input'] = pts_input
             sample_info['pts_rect'] = aug_pts_rect
-            #
             sample_info['pts_features'] = ret_pts_features
             sample_info['gt_boxes3d'] = aug_gt_boxes3d
             return sample_info
@@ -524,12 +489,11 @@ def create_logger():
 if __name__ == '__main__':
     # root_dir = r'D:\code\EPNet\data'
     DATA_PATH = 'data'
-    logger = create_logger()
+    # logger = create_logger()
     train_set = KittiSSDDataset(root_dir=DATA_PATH,
                                 npoints=cfg.RPN.NUM_POINTS,
                                 split=cfg.TRAIN.SPLIT,
                                 mode='TRAIN',
-                                logger=logger,
                                 classes=cfg.CLASSES)
 
     item0 = train_set[0]
