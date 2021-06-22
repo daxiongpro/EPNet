@@ -87,10 +87,21 @@ def _sigmoid_cross_entropy_with_logits(logits, labels):
     return loss
 
 
-def get_reg_loss(cls_score, mask_score, pred_reg, reg_label, loc_scope, loc_bin_size, num_head_bin, anchor_size,
-                 get_xz_fine=True, get_y_by_bin=False, loc_y_scope=0.5, loc_y_bin_size=0.25,
+def get_reg_loss(cls_score,
+                 mask_score,
+                 pred_reg,
+                 reg_label,
+                 loc_scope,
+                 loc_bin_size,
+                 num_head_bin,
+                 anchor_size,
+                 get_xz_fine=True,
+                 get_y_by_bin=False,
+                 loc_y_scope=0.5,
+                 loc_y_bin_size=0.25,
                  get_ry_fine=False,
-                 use_cls_score=False, use_mask_score=False,
+                 use_cls_score=False,
+                 use_mask_score=False,
                  gt_iou_weight=None,
                  use_iou_branch=False,
                  iou_branch_pred=None

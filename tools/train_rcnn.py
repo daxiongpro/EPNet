@@ -15,6 +15,7 @@ import lib.net.train_functions as train_functions
 from lib.config import cfg, cfg_from_file, save_config_to_file, cfg_from_list
 import tools.train_utils.train_utils as train_utils
 from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
+from lib.net.PI_SSD import PISSD
 from tools.train_utils.fastai_optim import OptimWrapper
 from tools.train_utils import learning_schedules_fastai as lsf
 
@@ -187,7 +188,7 @@ if __name__ == "__main__":
     # create dataloader & network & optimizer
     train_loader, test_loader = create_dataloader(logger)
     fn_decorator = train_functions.model_joint_fn_decorator()
-    model = PointRCNN(num_classes=train_loader.dataset.num_class, use_xyz=True, mode='TRAIN')
+    model = PISSD(num_classes=train_loader.dataset.num_class, use_xyz=True, mode='TRAIN')
     optimizer = create_optimizer(model)
 
     # load checkpoint if it is possible

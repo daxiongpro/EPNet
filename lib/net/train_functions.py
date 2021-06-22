@@ -120,7 +120,8 @@ def model_joint_fn_decorator():
             weight = rpn_cls_flat.new(rpn_cls_flat.shape[0]).fill_(1.0)
             weight[fg_mask] = cfg.RPN.FG_WEIGHT
             rpn_cls_label_target = (rpn_cls_label_flat > 0).float()
-            batch_loss_cls = F.binary_cross_entropy(torch.sigmoid(rpn_cls_flat), rpn_cls_label_target,
+            batch_loss_cls = F.binary_cross_entropy(torch.sigmoid(rpn_cls_flat),
+                                                    rpn_cls_label_target,
                                                     weight=weight, reduction='none')
             cls_valid_mask = (rpn_cls_label_flat >= 0).float()
             rpn_loss_cls = (batch_loss_cls * cls_valid_mask).sum() / torch.clamp(cls_valid_mask.sum(), min=1.0)
