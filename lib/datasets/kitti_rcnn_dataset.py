@@ -473,23 +473,9 @@ class KittiSSDDataset(KittiDataset):
         return ans_dict
 
 
-def create_logger():
-    root_result_dir = os.path.join(os.getcwd(), 'output')
-    log_file = os.path.join(root_result_dir, 'log_train.txt')
-
-    log_format = '%(asctime)s  %(levelname)5s  %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=log_format, filename=log_file)
-    console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG)
-    console.setFormatter(logging.Formatter(log_format))
-    logging.getLogger(__name__).addHandler(console)
-    return logging.getLogger(__name__)
-
-
 if __name__ == '__main__':
     # root_dir = r'D:\code\EPNet\data'
     DATA_PATH = 'data'
-    # logger = create_logger()
     train_set = KittiSSDDataset(root_dir=DATA_PATH,
                                 npoints=cfg.RPN.NUM_POINTS,
                                 split=cfg.TRAIN.SPLIT,
@@ -504,16 +490,16 @@ if __name__ == '__main__':
         npoint=4096,  # [4096, 1024, 256, 64]
         radii=[0.1, 0.5],  # [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
         nsamples=[16, 32],  # [[16, 32], [16, 32], [16, 32], [16, 32]]
-        mlps=[[16, 16, 32], [32, 32, 64]],  # mlps = cfg.RPN.SA_CONFIG.MLPS[k].copy()
+        mlps=[[1, 16, 32], [1, 16, 32]],  # mlps = cfg.RPN.SA_CONFIG.MLPS[k].copy()
         use_xyz=True,
         bn=True
-    )
+    ).cuda()
 
-    B = 1
-    N = 5000
+    B = 2
+    N = 16384
     C = 16
     xyz = pts[..., 0:3].contiguous().unsqueeze(0)
-    features = pts[..., 3:].contiguous().unsqueeze(0)
+    features = pts[..., 3:].contiguous().unsqueeze(0).transpose(1, 2)
     new_xyz = None
 
     out = net(xyz, features, new_xyz)

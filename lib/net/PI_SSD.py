@@ -1,38 +1,36 @@
-import torch
 import torch.nn as nn
-from lib.net.rpn import RPN
-
+import torch.nn.functional as F
+import numpy as np
+import pointnet2_lib.pointnet2.pytorch_utils as pt_utils
+import lib.utils.loss_utils as loss_utils
 from lib.config import cfg
+from lib.net.pointnet2_msg import Pointnet2MSG
+from lib.net.rpn_layer.proposal_layer import ProposalLayer
 
 
 class PISSD(nn.Module):
-    def __init__(self, num_classes, use_xyz=True, mode='TRAIN'):
+    def __init__(self, use_xyz=True, mode='TRAIN'):
         super().__init__()
-        assert cfg.RPN.ENABLED
-        self.rpn = RPN(use_xyz=use_xyz, mode=mode)
-        rcnn_input_channels = 128  # channels of rpn_layer features
 
+        input_channels = int(cfg.RPN.USE_INTENSITY) + 3 * int(cfg.RPN.USE_RGB)
+        self.backbone_net = Pointnet2MSG(input_channels=input_channels, use_xyz=use_xyz)
 
     def forward(self, input_data):
         """
-        @param input_data: dict()
-        @return:
+        :param input_data: dict (point_cloud)
+        :return:
         """
-        if cfg.RPN.ENABLED:
-            output = {}
-            # rpn_layer inference
-            with torch.set_grad_enabled((not cfg.RPN.FIXED) and self.training):
-                if cfg.RPN.FIXED:
-                    self.rpn.eval()
-                rpn_output = self.rpn(input_data)
-                output.update(rpn_output)
-                backbone_xyz = rpn_output['backbone_xyz']
-                backbone_features = rpn_output['backbone_features']
-        else:
-            raise NotImplementedError
-        return output
+        pts_input = input_data['pts_input']
+        img_input = input_data['img']
+        xy_input = input_data['pts_origin_xy']
+        # 将图片融合进模型
+        backbone_xyz, backbone_features = self.backbone_net(pts_input, img_input, xy_input)  # (B, N, 3), (B, C, N)
 
+        # 分类头和回归头
+        rpn_cls = self.rpn_cls_layer(backbone_features).transpose(1, 2).contiguous()  # (B, N, 1)
+        rpn_reg = self.rpn_reg_layer(backbone_features).transpose(1, 2).contiguous()  # (B, N, C)
 
-if __name__ == '__main__':
-    a = torch.ones(3)
-    b = a.cuda()
+        ret_dict = {'rpn_cls': rpn_cls, 'rpn_reg': rpn_reg,
+                    'backbone_xyz': backbone_xyz, 'backbone_features': backbone_features}
+
+        return ret_dict

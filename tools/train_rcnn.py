@@ -53,23 +53,14 @@ parser.add_argument('--model_type', type=str, default='base', help='model type')
 args = parser.parse_args()
 
 
-def create_logger(log_file):
-    log_format = '%(asctime)s  %(levelname)5s  %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=log_format, filename=log_file)
-    console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG)
-    console.setFormatter(logging.Formatter(log_format))
-    logging.getLogger(__name__).addHandler(console)
-    return logging.getLogger(__name__)
-
-
-def create_dataloader(logger):
+def create_dataloader():
     DATA_PATH = os.path.join('../', 'data')
 
     # create dataloader
-    train_set = KittiSSDDataset(root_dir=DATA_PATH, npoints=cfg.RPN.NUM_POINTS, split=cfg.TRAIN.SPLIT,
+    train_set = KittiSSDDataset(root_dir=DATA_PATH,
+                                npoints=cfg.RPN.NUM_POINTS,
+                                split=cfg.TRAIN.SPLIT,
                                 mode='TRAIN',
-                                logger=logger,
                                 classes=cfg.CLASSES,
                                 gt_database_dir=args.gt_database)
     train_loader = DataLoader(train_set,
@@ -85,7 +76,6 @@ def create_dataloader(logger):
                                    npoints=cfg.RPN.NUM_POINTS,
                                    split=cfg.TRAIN.VAL_SPLIT,
                                    mode='EVAL',
-                                   logger=logger,
                                    classes=cfg.CLASSES)
         test_loader = DataLoader(test_set,
                                  batch_size=1,
@@ -96,37 +86,6 @@ def create_dataloader(logger):
     else:
         test_loader = None
     return train_loader, test_loader
-
-
-def create_optimizer(model):
-    if cfg.TRAIN.OPTIMIZER == 'adam':
-        optimizer = optim.Adam(model.parameters(), lr=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.WEIGHT_DECAY)
-    elif cfg.TRAIN.OPTIMIZER == 'sgd':
-        optimizer = optim.SGD(model.parameters(), lr=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.WEIGHT_DECAY,
-                              momentum=cfg.TRAIN.MOMENTUM)
-    elif cfg.TRAIN.OPTIMIZER == 'adam_onecycle':
-        def children(m: nn.Module):
-            return list(m.children())
-
-        def num_children(m: nn.Module) -> int:
-            return len(children(m))
-
-        flatten_model = lambda m: sum(map(flatten_model, m.children()), []) if num_children(m) else [m]
-        get_layer_groups = lambda m: [nn.Sequential(*flatten_model(m))]
-
-        optimizer_func = partial(optim.Adam, betas=(0.9, 0.99))
-        optimizer = OptimWrapper.create(
-            optimizer_func, 3e-3, get_layer_groups(model), wd=cfg.TRAIN.WEIGHT_DECAY, true_wd=True, bn_wd=True
-        )
-
-        # fix rpn: do this since we use costomized optimizer.step
-        if cfg.RPN.ENABLED and cfg.RPN.FIXED:
-            for param in model.rpn.parameters():
-                param.requires_grad = False
-    else:
-        raise NotImplementedError
-
-    return optimizer
 
 
 def create_scheduler(optimizer, total_steps, last_epoch):
@@ -170,26 +129,14 @@ if __name__ == "__main__":
 
     os.makedirs(root_result_dir, exist_ok=True)
 
-    # 设置日志文件
-    log_file = os.path.join(root_result_dir, 'log_train.txt')
-    logger = create_logger(log_file)
-    logger.info('**********************Start logging**********************')
-
-    # log to file
-    gpu_list = os.environ['CUDA_VISIBLE_DEVICES'] if 'CUDA_VISIBLE_DEVICES' in os.environ.keys() else 'ALL'
-    logger.info('CUDA_VISIBLE_DEVICES=%s' % gpu_list)
-
-    # for key, val in vars(args).items():
-    #     logger.info("{:16} {}".format(key, val))
-
     # 将config保存到文件中
     # save_config_to_file(cfg, logger=logger)
 
     # create dataloader & network & optimizer
-    train_loader, test_loader = create_dataloader(logger)
+    train_loader, test_loader = create_dataloader()
     fn_decorator = train_functions.model_joint_fn_decorator()
     model = PISSD(num_classes=train_loader.dataset.num_class, use_xyz=True, mode='TRAIN')
-    optimizer = create_optimizer(model)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.WEIGHT_DECAY)
 
     # load checkpoint if it is possible
     start_epoch = it = 0
@@ -206,20 +153,17 @@ if __name__ == "__main__":
         lr_warmup_scheduler = None
 
     # start training
-    logger.info('**********************Start training**********************')
     ckpt_dir = os.path.join(root_result_dir, 'ckpt')
     os.makedirs(ckpt_dir, exist_ok=True)
+
     trainer = train_utils.Trainer(
         model,
         train_functions.model_joint_fn_decorator(),
-        fn_decorator,
         optimizer,
         ckpt_dir=ckpt_dir,
         lr_scheduler=lr_scheduler,
         bnm_scheduler=bnm_scheduler,
-        # model_fn_eval=train_functions.model_joint_fn_decorator(),
         model_fn_eval=fn_decorator,
-        # tb_log=tb_log,  # tensorboard 的log
         eval_frequency=1,
         lr_warmup_scheduler=lr_warmup_scheduler  # 学习率调整
     )
@@ -231,7 +175,4 @@ if __name__ == "__main__":
         train_loader,
         test_loader,
         ckpt_save_interval=args.ckpt_save_interval,
-        lr_scheduler_each_iter=(cfg.TRAIN.OPTIMIZER == 'adam_onecycle')
     )
-
-    logger.info('**********************End training**********************')
