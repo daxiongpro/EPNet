@@ -1,10 +1,11 @@
 import torch
+import pointnet2_3DSSD_cuda as pointnet2
 from torch.autograd import Variable
 from torch.autograd import Function
 import torch.nn as nn
 from typing import Tuple
 
-import pointnet2_cuda as pointnet2
+
 
 
 class FurthestPointSampling(Function):
@@ -34,6 +35,35 @@ class FurthestPointSampling(Function):
 
 
 furthest_point_sample = FurthestPointSampling.apply
+
+
+class FurthestPointSamplingWithDist(Function):
+    @staticmethod
+    def forward(ctx, xyz: torch.Tensor, npoint: int) -> torch.Tensor:
+        """
+        Uses iterative furthest point sampling to select a set of npoint features that have the largest
+        minimum distance
+        :param ctx:
+        :param xyz: (B, N, N) where N > npoint
+        :param npoint: int, number of features in the sampled set
+        :return:
+             output: (B, npoint) tensor containing the set
+        """
+        assert xyz.is_contiguous()
+
+        B, N, _ = xyz.size()
+        output = torch.cuda.IntTensor(B, npoint)
+        temp = torch.cuda.FloatTensor(B, N).fill_(1e10)
+
+        return_int = pointnet2.furthest_point_sampling_with_dist_wrapper(B, N, npoint, xyz, temp, output)
+        return output
+
+    @staticmethod
+    def backward(xyz, a=None):
+        return None, None
+
+
+furthest_point_sample_with_dist = FurthestPointSamplingWithDist.apply
 
 
 class GatherOperation(Function):
@@ -226,6 +256,38 @@ class BallQuery(Function):
 
 
 ball_query = BallQuery.apply
+
+
+class BallQueryDilated(Function):
+
+    @staticmethod
+    def forward(ctx, max_radius: float, min_radius: float, nsample: int, xyz: torch.Tensor, new_xyz: torch.Tensor) -> torch.Tensor:
+        """
+        :param ctx:
+        :param max_radius: float, max radius of the balls
+        :param min_radius: float, min radius of the balls
+        :param nsample: int, maximum number of features in the balls
+        :param xyz: (B, N, 3) xyz coordinates of the features
+        :param new_xyz: (B, npoint, 3) centers of the ball query
+        :return:
+            idx: (B, npoint, nsample) tensor with the indicies of the features that form the query balls
+        """
+        assert new_xyz.is_contiguous()
+        assert xyz.is_contiguous()
+
+        B, N, _ = xyz.size()
+        npoint = new_xyz.size(1)
+        idx = torch.cuda.IntTensor(B, npoint, nsample).zero_()
+
+        pointnet2.ball_query_dilated_wrapper(B, N, npoint, max_radius, min_radius, nsample, new_xyz, xyz, idx)
+        return idx
+
+    @staticmethod
+    def backward(ctx, a=None):
+        return None, None, None, None, None
+
+
+ball_query_dilated = BallQueryDilated.apply
 
 
 class QueryAndGroup(nn.Module):
