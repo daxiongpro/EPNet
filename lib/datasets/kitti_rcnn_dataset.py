@@ -8,7 +8,7 @@ import lib.datasets.kitti_utils as kitti_utils
 from lib.config import cfg
 from torch.nn.functional import grid_sample
 
-from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG
+# from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG
 
 
 def interpolate_img_by_xy(img, xy, normal_shape):

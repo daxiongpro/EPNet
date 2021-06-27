@@ -8,7 +8,6 @@ from typing import List
 from . import pointnet2_utils as pointnet2_3DSSD
 
 
-
 class _PointnetSAModuleBase(nn.Module):
 
     def __init__(self):
@@ -71,17 +70,15 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
     """Pointnet set abstraction layer with multiscale grouping"""
 
     def __init__(self, *,
-                 npoint: int,
+                 npoint: List[int],
                  radii: List[float],
                  nsamples: List[int],
                  mlps: List[List[int]],
-                 bn: bool = True,
                  use_xyz: bool = True,
                  pool_method='max_pool',
                  out_channle=-1,
-                 fps_type='D-FPS',
-                 fps_range=-1,
-                 dilated_group=False):
+                 fps_type: List[str] = ['D-FPS'],
+                 fps_range: List[int] = [-1]):
         """
         :param npoint: int，采样点个数
         :param radii: list of float, list of radii to group with，多尺度的多个半径大小
@@ -94,7 +91,6 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
         super().__init__()
         self.fps_types = fps_type
         self.fps_ranges = fps_range
-        self.dilated_group = dilated_group
 
         assert len(radii) == len(nsamples) == len(mlps)
 
@@ -125,6 +121,7 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
 
         if out_channle != -1 and len(self.mlps) > 0:
             in_channel = 0
+            # 多个尺度的feature拼接
             for mlp_tmp in mlps:
                 in_channel += mlp_tmp[-1]
             shared_mlps = []
@@ -135,8 +132,11 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
             ])
             self.out_aggregation = nn.Sequential(*shared_mlps)
 
-    def forward(self, xyz: torch.Tensor, features: torch.Tensor = None, new_xyz=None, ctr_xyz=None) -> (
-            torch.Tensor, torch.Tensor):
+    def forward(self,
+                xyz: torch.Tensor,
+                features: torch.Tensor = None,
+                new_xyz=None,
+                ctr_xyz=None) -> (torch.Tensor, torch.Tensor):
         """
         :param xyz: (B, N, 3) tensor of the xyz coordinates of the features
         :param features: (B, C, N) tensor of the descriptors of the the features
@@ -150,46 +150,48 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
 
         xyz_flipped = xyz.transpose(1, 2).contiguous()
 
-        if ctr_xyz is None:
-            last_fps_end_index = 0
-            fps_idxes = []
-            for i in range(len(self.fps_types)):
-                fps_type = self.fps_types[i]
-                fps_range = self.fps_ranges[i]
-                npoint = self.npoint[i]
-                if npoint == 0:
-                    continue
-                if fps_range == -1:
-                    xyz_tmp = xyz[:, last_fps_end_index:, :]
-                    feature_tmp = features.transpose(1, 2)[:, last_fps_end_index:, :]
-                else:
-                    xyz_tmp = xyz[:, last_fps_end_index:fps_range, :]
-                    feature_tmp = features.transpose(1, 2)[:, last_fps_end_index:fps_range, :]
-                    last_fps_end_index += fps_range
-                if fps_type == 'D-FPS':
-                    fps_idx = pointnet2_utils.furthest_point_sample(xyz_tmp.contiguous(), npoint)
-                elif fps_type == 'F-FPS':
-                    # features_SSD = xyz_tmp
-                    features_SSD = torch.cat([xyz_tmp, feature_tmp], dim=-1)
-                    features_for_fps_distance = SSD.calc_square_dist(features_SSD, features_SSD)
-                    features_for_fps_distance = features_for_fps_distance.contiguous()
-                    fps_idx = pointnet2_3DSSD.furthest_point_sample_with_dist(features_for_fps_distance, npoint)
-                elif fps_type == 'FS':  # 融合采样
-                    # features_SSD = xyz_tmp
-                    features_SSD = torch.cat([xyz_tmp, feature_tmp], dim=-1)
-                    features_for_fps_distance = SSD.calc_square_dist(features_SSD, features_SSD)
-                    features_for_fps_distance = features_for_fps_distance.contiguous()
-                    fps_idx_1 = pointnet2_3DSSD.furthest_point_sample_with_dist(features_for_fps_distance, npoint)
-                    fps_idx_2 = pointnet2_3DSSD.furthest_point_sample(xyz_tmp, npoint)
-                    fps_idx = torch.cat([fps_idx_1, fps_idx_2], dim=-1)  # [bs, npoint * 2]
-                fps_idxes.append(fps_idx)
-            fps_idxes = torch.cat(fps_idxes, dim=-1)
-            new_xyz = pointnet2_3DSSD.gather_operation(
-                xyz_flipped, fps_idxes
-            ).transpose(1, 2).contiguous() if self.npoint is not None else None
-        else:
-            new_xyz = ctr_xyz
+        # 获取new_xyz
+        last_fps_end_index = 0
+        fps_idxes = []
+        # 用不同的采样方法 多次采样
+        for i in range(len(self.fps_types)):
+            fps_type = self.fps_types[i]
+            print(self.fps_ranges)
+            fps_range = self.fps_ranges[i]
 
+            npoint = self.npoint[i]
+            if npoint == 0:
+                continue
+            if fps_range == -1:
+                xyz_tmp = xyz[:, last_fps_end_index:, :]
+                feature_tmp = features.transpose(1, 2)[:, last_fps_end_index:, :]
+            else:
+                xyz_tmp = xyz[:, last_fps_end_index:fps_range, :]
+                feature_tmp = features.transpose(1, 2)[:, last_fps_end_index:fps_range, :]
+                last_fps_end_index += fps_range
+            if fps_type == 'D-FPS':
+                fps_idx = pointnet2_utils.furthest_point_sample(xyz_tmp.contiguous(), npoint)
+            elif fps_type == 'F-FPS':
+                # features_SSD = xyz_tmp
+                features_SSD = torch.cat([xyz_tmp, feature_tmp], dim=-1)
+                features_for_fps_distance = SSD.calc_square_dist(features_SSD, features_SSD)
+                features_for_fps_distance = features_for_fps_distance.contiguous()
+                fps_idx = pointnet2_3DSSD.furthest_point_sample_with_dist(features_for_fps_distance, npoint)
+            elif fps_type == 'FS':  # 融合采样
+                # features_SSD = xyz_tmp
+                features_SSD = torch.cat([xyz_tmp, feature_tmp], dim=-1)
+                features_for_fps_distance = SSD.calc_square_dist(features_SSD, features_SSD)
+                features_for_fps_distance = features_for_fps_distance.contiguous()
+                fps_idx_1 = pointnet2_3DSSD.furthest_point_sample_with_dist(features_for_fps_distance, npoint)
+                fps_idx_2 = pointnet2_3DSSD.furthest_point_sample(xyz_tmp, npoint)
+                fps_idx = torch.cat([fps_idx_1, fps_idx_2], dim=-1)  # [bs, npoint * 2]
+            fps_idxes.append(fps_idx)
+        fps_idxes = torch.cat(fps_idxes, dim=-1)
+        new_xyz = pointnet2_3DSSD.gather_operation(
+            xyz_flipped, fps_idxes
+        ).transpose(1, 2).contiguous() if self.npoint is not None else None
+
+        # 获取new_features
         if len(self.groupers) > 0:
             for i in range(len(self.groupers)):
                 new_features = self.groupers[i](xyz, new_xyz, features)  # (B, C, npoint, nsample)
@@ -215,36 +217,3 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
             new_features = pointnet2_utils.gather_operation(features, fps_idxes).contiguous()
 
         return new_xyz, new_features, fps_idx
-
-
-class Vote_layer(nn.Module):
-    def __init__(self, mlp_list, pre_channel, max_translate_range):
-        super().__init__()
-        self.mlp_list = mlp_list
-        for i in range(len(mlp_list)):
-            shared_mlps = []
-
-            shared_mlps.extend([
-                nn.Conv1d(pre_channel, mlp_list[i], kernel_size=1, bias=False),
-                nn.BatchNorm1d(mlp_list[i]),
-                nn.ReLU()
-            ])
-            pre_channel = mlp_list[i]
-        self.mlp_modules = nn.Sequential(*shared_mlps)
-
-        self.ctr_reg = nn.Conv1d(pre_channel, 3, kernel_size=1)
-        self.min_offset = torch.tensor(max_translate_range).float().view(1, 1, 3)
-
-    def forward(self, xyz, features):
-        new_features = self.mlp_modules(features)
-        ctr_offsets = self.ctr_reg(new_features)
-
-        ctr_offsets = ctr_offsets.transpose(1, 2)
-
-        min_offset = self.min_offset.repeat((xyz.shape[0], xyz.shape[1], 1)).to(xyz.device)
-
-        limited_ctr_offsets = torch.where(ctr_offsets < min_offset, min_offset, ctr_offsets)
-        min_offset = -1 * min_offset
-        limited_ctr_offsets = torch.where(limited_ctr_offsets > min_offset, min_offset, limited_ctr_offsets)
-        xyz = xyz + limited_ctr_offsets
-        return xyz, new_features, ctr_offsets
