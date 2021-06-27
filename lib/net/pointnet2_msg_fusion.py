@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from lib.config import cfg
 from torch.nn.functional import grid_sample
 
@@ -80,7 +81,8 @@ class ImageAttentionLayer(nn.Module):
         # print(img_feas)
         ri = self.fc1(img_feas_f)
         rp = self.fc2(point_feas_f)
-        att = F.sigmoid(self.fc3(F.tanh(ri + rp)))  # BNx1
+        # att = F.sigmoid(self.fc3(F.tanh(ri + rp)))  # BNx1
+        att = torch.sigmoid(self.fc3(torch.tanh(ri + rp)))  # BNx1
         att = att.squeeze(1)
         att = att.view(batch, 1, -1)  # B1N
         img_feas_new = self.conv1(img_feas)
