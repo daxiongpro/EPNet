@@ -216,4 +216,4 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
         else:
             new_features = pointnet2_utils.gather_operation(features, fps_idxes).contiguous()
 
-        return new_xyz, new_features, fps_idx
+        return new_xyz, new_features, fps_idxes

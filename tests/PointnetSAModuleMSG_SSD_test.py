@@ -33,6 +33,6 @@ new_xyz = None
 :param new_xyz:
 """
 
-new_xyz, new_features = net(xyz, features, new_xyz)
+new_xyz, new_features, idx = net(xyz, features, new_xyz)
 print(new_xyz)
 print(new_features)

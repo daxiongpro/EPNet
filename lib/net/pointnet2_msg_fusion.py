@@ -59,7 +59,7 @@ class ImageAttentionLayer(nn.Module):
         print('##############ADDITION ATTENTION(ADD)#########')
         super(ImageAttentionLayer, self).__init__()
         self.ic, self.pc = channels  # 图像通道数，点云通道数
-        rc = self.pc // 4
+        rc = self.pc // 4  # 统一成rc通道
         self.conv1 = nn.Sequential(nn.Conv1d(self.ic, self.pc, 1),
                                    nn.BatchNorm1d(self.pc),
                                    nn.ReLU())
@@ -90,12 +90,23 @@ class ImageAttentionLayer(nn.Module):
 
 class AttenFusionConv(nn.Module):
     def __init__(self, inplanes_I, inplanes_P, outplanes):
+        """"
+        inplanes_I:输入的img 通道数
+        inplanes_P:输入的point 通道数
+        outplanes：输出的point 通道数
+        """
         super(AttenFusionConv, self).__init__()
         self.IA_Layer = ImageAttentionLayer(channels=[inplanes_I, inplanes_P])
         self.conv1 = torch.nn.Conv1d(inplanes_P + inplanes_P, outplanes, 1)
         self.bn1 = torch.nn.BatchNorm1d(outplanes)
 
     def forward(self, point_features, img_features):
+        """
+        融合模块
+        @param point_features: (B, C1, N)
+        @param img_features: (B, C2, N)
+        @return:
+        """
         img_features = self.IA_Layer(img_features, point_features)
         fusion_features = torch.cat([point_features, img_features], dim=1)
         fusion_features = F.relu(self.bn1(self.conv1(fusion_features)))
@@ -114,11 +125,13 @@ def feature_gather(feature_map, xy):
     return interpolate_feature.squeeze(2)  # (B,C,N)
 
 
-# 融合Lidar、点云特征
+# 融合Lidar、点云特征；backbone
 class Pointnet2MSGImgFusion(nn.Module):
     def __init__(self, use_xyz=True):
         super().__init__()
-        self.SA_modules = nn.ModuleList()
+        self.SA_modules = nn.ModuleList()  # point backbone
+        self.Img_Block = nn.ModuleList()  # img backbone
+        self.Fusion_Conv = nn.ModuleList()  # fusion_layer
         # mlps = [[[16, 16, 32], [32, 32, 64]],  # [16, 16, 32], [16, 16, 32]。第一个MLP不知道为啥维度不同
         #         [[64, 64, 128], [64, 96, 128]],
         #         [[128, 196, 256], [128, 196, 256]],
@@ -153,8 +166,6 @@ class Pointnet2MSGImgFusion(nn.Module):
 
         # Img backbone and fusion layer
         img_channels = [3, 64, 128, 256, 512]
-        self.Img_Block = nn.ModuleList()
-        self.Fusion_Conv = nn.ModuleList()
         for i in range(len(img_channels) - 1):  # [3, 64, 128, 256, 512]
             self.Img_Block.append(
                 BasicBlock(img_channels[i], img_channels[i + 1], stride=1))
@@ -172,7 +183,10 @@ class Pointnet2MSGImgFusion(nn.Module):
 
         return xyz, features
 
-    def forward(self, pointcloud: torch.cuda.FloatTensor, image=None, xy=None):
+    def forward(self,
+                pointcloud: torch.cuda.FloatTensor,
+                image=None,
+                xy=None):
         """
 
         @param pointcloud: 点云(B, N, xyzf)
@@ -182,32 +196,30 @@ class Pointnet2MSGImgFusion(nn.Module):
         new_feature:
         """
         xyz, features = self._break_up_pc(pointcloud)
-
         l_xyz, l_features = [xyz], [features]
 
-        if cfg.LI_FUSION.ENABLED:
-            """
-            normalize xy to [-1,1]。为什么？
-            W为图片宽度
-            x / W 取值范围(0, 1)
-            x / W * 2 取值范围(0, 2)
-            x / W * 2 -1 取值范围(-1, 1)
-            y同理
-            xy: (B, N, 2)
-            """
-            size_range = [1280.0, 384.0]
-            xy[:, :, 0] = xy[:, :, 0] / (size_range[0] - 1.0) * 2.0 - 1.0
-            xy[:, :, 1] = xy[:, :, 1] / (size_range[1] - 1.0) * 2.0 - 1.0
-            # = xy / (size_range - 1.) * 2 - 1.
-            l_xy_cor = [xy]
-            img = [image]
+        """
+        normalize xy to [-1,1]。为什么？
+        W为图片宽度
+        x / W 取值范围(0, 1)
+        x / W * 2 取值范围(0, 2)
+        x / W * 2 -1 取值范围(-1, 1)
+        y同理
+        xy: (B, N, 2)
+        """
+        size_range = [1280.0, 384.0]
+        xy[:, :, 0] = xy[:, :, 0] / (size_range[0] - 1.0) * 2.0 - 1.0
+        xy[:, :, 1] = xy[:, :, 1] / (size_range[1] - 1.0) * 2.0 - 1.0
+        # = xy / (size_range - 1.) * 2 - 1.
+        l_xy_cor = [xy]
+        img = [image]
 
         for i in range(len(self.SA_modules)):
             # li_index: 采样的点在原来的点云中的index
             li_xyz, li_features, li_index = self.SA_modules[i](l_xyz[i], l_features[i])
 
             li_index = li_index.long().unsqueeze(-1).repeat(1, 1, 2)
-            li_xy_cor = torch.gather(l_xy_cor[i], dim=1, index=li_index)
+            li_xy_cor = torch.gather(l_xy_cor[i], dim=1, index=li_index)  # (B, M, 2)
             """
             l_xy_cor[i]：上一层点云在img中的xy坐标
             li_index：下一层点云在上一层点云中的位置index
@@ -221,12 +233,10 @@ class Pointnet2MSGImgFusion(nn.Module):
             dim在第几维上操作（不用理解）
             index：收集的元素的索引
             eg.
-            input = [
-                    [2, 3, 4, 5],
+            input = [[2, 3, 4, 5],
                     [1, 4, 3],
                     [4, 2, 2, 5, 7],
-                    [1]
-                ]
+                    [1]]
             length = torch.LongTensor([[4],[3],[5],[1]])
             out = torch.gather(input, 1, length)
             含义：第一行取第4个元素，第二行取第3个元素，第三行取第5个元素，第四行取第1个元素
@@ -245,4 +255,4 @@ class Pointnet2MSGImgFusion(nn.Module):
             l_xyz.append(li_xyz)
             l_features.append(li_features)
 
-        return l_xyz, l_features
+        return l_xyz[-1], l_features[-1]
