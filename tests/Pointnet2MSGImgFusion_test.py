@@ -34,5 +34,4 @@ for cur_it, input_data in enumerate(train_loader):
     xy_input = torch.from_numpy(xy_input).cuda(non_blocking=True).float()
 
     new_xyz, new_features = net(pts_input, img_input, xy_input)
-    print(new_xyz, '\n', new_features)
-    break
+    print("------------------------", input_data['gt_boxes3d'].shape)

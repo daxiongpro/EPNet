@@ -8,6 +8,7 @@ import lib.datasets.kitti_utils as kitti_utils
 from lib.config import cfg
 from torch.nn.functional import grid_sample
 
+
 # from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG
 
 
@@ -423,8 +424,8 @@ class KittiSSDDataset(KittiDataset):
         sample_info['pts_input'] = pts_input  # xyz_intensity坐标
         sample_info['pts_rect'] = aug_pts_rect  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
         sample_info['pts_features'] = ret_pts_features
-        sample_info['rpn_cls_label'] = rpn_cls_label
-        sample_info['rpn_reg_label'] = rpn_reg_label
+        sample_info['rpn_cls_label'] = rpn_cls_label  # (16384,)
+        sample_info['rpn_reg_label'] = rpn_reg_label  # (16384, 7)
         sample_info['gt_boxes3d'] = aug_gt_boxes3d
         return sample_info
 

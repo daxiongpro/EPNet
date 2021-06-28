@@ -88,7 +88,12 @@ def model_joint_fn_decorator():
 
         return ModelReturn(loss, tb_dict, disp_dict)
 
-    def get_rpn_loss(model, rpn_cls, rpn_reg, rpn_cls_label, rpn_reg_label, tb_dict):
+    def get_rpn_loss(model,
+                     rpn_cls,
+                     rpn_reg,
+                     rpn_cls_label,  # (16384,)
+                     rpn_reg_label,  # (16384,7)
+                     tb_dict):
         if isinstance(model, nn.DataParallel):
             rpn_cls_loss_func = model.module.rpn.rpn_cls_loss_func
         else:
@@ -100,7 +105,7 @@ def model_joint_fn_decorator():
 
         # RPN classification loss
         if cfg.RPN.LOSS_CLS == 'DiceLoss':
-            rpn_loss_cls = rpn_cls_loss_func(rpn_cls, rpn_cls_label_flat)
+            rpn_loss_cls = rpn_cls_loss_func(rpn_cls, rpn_cls_label_flat)  # ------------------loss_util.DiceLoss
 
         elif cfg.RPN.LOSS_CLS == 'SigmoidFocalLoss':
             rpn_cls_target = (rpn_cls_label_flat > 0).float()
@@ -109,7 +114,8 @@ def model_joint_fn_decorator():
             cls_weights = pos + neg
             pos_normalizer = pos.sum()
             cls_weights = cls_weights / torch.clamp(pos_normalizer, min=1.0)
-            rpn_loss_cls = rpn_cls_loss_func(rpn_cls_flat, rpn_cls_target, cls_weights)
+            rpn_loss_cls = rpn_cls_loss_func(rpn_cls_flat, rpn_cls_target,
+                                             cls_weights)  # ------------------loss_util.SigmoidFocalClassificationLoss
             rpn_loss_cls_pos = (rpn_loss_cls * pos).sum()
             rpn_loss_cls_neg = (rpn_loss_cls * neg).sum()
             rpn_loss_cls = rpn_loss_cls.sum()
