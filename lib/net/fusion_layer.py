@@ -4,10 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lib.config import cfg
 from torch.nn.functional import grid_sample
 
-from pointnet2_lib.pointnet2.pointnet2_modules import SALayer
+from pointnet2.pointnet2_modules import SALayer
 
 BatchNorm2d = nn.BatchNorm2d
 

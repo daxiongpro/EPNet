@@ -1,11 +1,6 @@
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import pointnet2_lib.pointnet2.pytorch_utils as pt_utils
-import lib.utils.loss_utils as loss_utils
 from lib.config import cfg
 from lib.net.fusion_layer import FusionLayer
-from lib.net.rpn_layer.proposal_layer import ProposalLayer
 
 
 class PISSD(nn.Module):
@@ -26,7 +21,6 @@ class PISSD(nn.Module):
         xy_input = input_data['pts_origin_xy']
         # 将图片融合进模型
         backbone_xyz, backbone_features = self.backbone_net(pts_input, img_input, xy_input)  # (B, N, 3), (B, C, N)
-
 
         # 分类头和回归头
         rpn_cls = self.rpn_cls_layer(backbone_features).transpose(1, 2).contiguous()  # (B, N, 1)

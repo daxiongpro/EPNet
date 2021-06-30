@@ -1,9 +1,6 @@
 import torch
 # import pointnet2_cuda as pointnet2
-from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
-from pointnet2_lib.pointnet2 import pointnet2_utils
-from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG
-from pointnet2_lib.pointnet2.pytorch_utils import SharedMLP
+from pointnet2.pointnet2_modules import PointnetSAModuleMSG
 
 net = PointnetSAModuleMSG(
     npoint=4096,  # [4096, 1024, 256, 64]

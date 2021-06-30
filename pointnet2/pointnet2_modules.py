@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import pointnet2_utils
-from pointnet2_lib import SSD
+import pointnet2_utils, SSD
 # from . import pytorch_utils as pt_utils
 from typing import List
-from . import pointnet2_utils as pointnet2_3DSSD
+import pointnet2_utils as pointnet2_3DSSD
 
 
 class _PointnetSAModuleBase(nn.Module):

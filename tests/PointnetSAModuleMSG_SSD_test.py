@@ -1,5 +1,5 @@
 import torch
-from pointnet2_lib.pointnet2.pointnet2_modules import SALayer
+from pointnet2.pointnet2_modules import SALayer
 
 net = SALayer(
     npoint=[256, 0],  # [4096, 1024, 256, 64]

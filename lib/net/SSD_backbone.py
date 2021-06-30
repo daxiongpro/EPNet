@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 
-from pointnet2_lib.pointnet2 import pointnet2_modules
-from pointnet2_lib.pointnet2 import pointnet2_modules as pointnet2_modules_stack
-from pointnet2_lib.pointnet2 import pointnet2_utils as pointnet2_utils_stack
+from pointnet2 import pointnet2_modules
 
 
 class SSDBackbone(nn.Module):
