@@ -1,7 +1,7 @@
 import torch
-from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG_SSD
+from pointnet2_lib.pointnet2.pointnet2_modules import SALayer
 
-net = PointnetSAModuleMSG_SSD(
+net = SALayer(
     npoint=[256, 0],  # [4096, 1024, 256, 64]
     radii=[0.1, 0.5],  # [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]] 两种尺度的不同半径
     nsamples=[16, 32],  # [[16, 32], [16, 32], [16, 32], [16, 32]] 两种尺度的不同采样数

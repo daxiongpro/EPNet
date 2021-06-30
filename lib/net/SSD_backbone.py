@@ -33,7 +33,7 @@ class SSDBackbone(nn.Module):
                     mlps[idx] = [channel_in] + mlps[idx]
 
                 self.SA_modules.append(
-                    pointnet2_modules.PointnetSAModuleMSG_SSD(
+                    pointnet2_modules.SALayer(
                         npoint=self.model_cfg.SA_CONFIG.NPOINTS[k],
                         radii=self.model_cfg.SA_CONFIG.RADIUS[k],
                         nsamples=self.model_cfg.SA_CONFIG.NSAMPLE[k],

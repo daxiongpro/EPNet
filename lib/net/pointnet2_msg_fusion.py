@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from lib.config import cfg
 from torch.nn.functional import grid_sample
 
-from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG_SSD
+from pointnet2_lib.pointnet2.pointnet2_modules import SALayer
 
 BatchNorm2d = nn.BatchNorm2d
 
@@ -128,7 +128,7 @@ def feature_gather(feature_map, xy):
 
 
 # 融合Lidar、点云特征；backbone
-class Pointnet2MSGImgFusion(nn.Module):
+class FusionLayer(nn.Module):
 
     # 多个SA，每个参数是一个列表。列表长度是SA个数
     def __init__(self,
@@ -151,7 +151,7 @@ class Pointnet2MSGImgFusion(nn.Module):
 
         for k in range(len(npoints)):  # 4个SA
             self.SA_modules.append(
-                PointnetSAModuleMSG_SSD(
+                SALayer(
                     npoint=npoints[k],
                     radii=radii[k],
                     nsamples=nsamples[k],

@@ -4,7 +4,7 @@ import numpy as np
 import pointnet2_lib.pointnet2.pytorch_utils as pt_utils
 import lib.utils.loss_utils as loss_utils
 from lib.config import cfg
-from lib.net.pointnet2_msg_fusion import Pointnet2MSGImgFusion
+from lib.net.pointnet2_msg_fusion import FusionLayer
 from lib.net.rpn_layer.proposal_layer import ProposalLayer
 
 
@@ -13,7 +13,7 @@ class PISSD(nn.Module):
         super().__init__()
 
         input_channels = int(cfg.RPN.USE_INTENSITY) + 3 * int(cfg.RPN.USE_RGB)
-        self.backbone_net = Pointnet2MSGImgFusion(input_channels=input_channels, use_xyz=use_xyz)
+        self.backbone_net = FusionLayer(input_channels=input_channels, use_xyz=use_xyz)
         self.vote_layer = Vote_layer()
 
     def forward(self, input_data):

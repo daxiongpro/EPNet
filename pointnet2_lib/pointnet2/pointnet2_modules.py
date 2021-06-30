@@ -66,7 +66,7 @@ class _PointnetSAModuleBase(nn.Module):
         return new_xyz, torch.cat(new_features_list, dim=1), idx
 
 
-class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
+class SALayer(_PointnetSAModuleBase):
     """Pointnet set abstraction layer with multiscale grouping"""
 
     def __init__(self, *,

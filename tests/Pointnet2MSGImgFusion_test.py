@@ -3,8 +3,8 @@ from torch.utils.data import DataLoader
 
 from lib.config import cfg
 from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
-from lib.net.pointnet2_msg_fusion import Pointnet2MSGImgFusion
-from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG_SSD
+from lib.net.pointnet2_msg_fusion import FusionLayer
+from pointnet2_lib.pointnet2.pointnet2_modules import SALayer
 
 npoints = [[4096], [512], [256, 256], [256, 0]]
 radii = [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
@@ -17,7 +17,7 @@ fps_range = [[-1], [-1], [512, -1], [256, -1]]
 point_channels = [64, 128, 256, 256]
 img_channels = [3, 64, 128, 256, 512]
 
-net = Pointnet2MSGImgFusion(npoints, radii, nsamples, mlps, fps_type, fps_range, point_channels, img_channels).cuda()
+net = FusionLayer(npoints, radii, nsamples, mlps, fps_type, fps_range, point_channels, img_channels).cuda()
 DATA_PATH = '../data'
 train_set = KittiSSDDataset(root_dir=DATA_PATH,
                             npoints=cfg.RPN.NUM_POINTS,
