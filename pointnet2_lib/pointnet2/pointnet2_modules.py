@@ -77,9 +77,10 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
                  use_xyz: bool = True,
                  pool_method='max_pool',
                  out_channle=-1,
+                 # MLP后每个点输出的维度
                  fps_type: List[str] = ['D-FPS'],
                  fps_range: List[int] = [-1]):
-        """
+        """MSG多次采样，所以参数都是列表。列表长度是采样个数
         :param npoint: int，采样点个数
         :param radii: list of float, list of radii to group with，多尺度的多个半径大小
         :param nsamples: list of int, number of samples in each ball query，每个球里面采样点的个数
@@ -132,15 +133,11 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
             ])
             self.out_aggregation = nn.Sequential(*shared_mlps)
 
-    def forward(self,
-                xyz: torch.Tensor,
-                features: torch.Tensor = None,
-                new_xyz=None,
-                ctr_xyz=None) -> (torch.Tensor, torch.Tensor):
+    def forward(self, xyz: torch.Tensor, features: torch.Tensor = None, new_xyz=None) -> (torch.Tensor, torch.Tensor):
         """
         :param xyz: (B, N, 3) tensor of the xyz coordinates of the features
         :param features: (B, C, N) tensor of the descriptors of the the features
-        :param new_xyz:
+        :param new_xyz:没用
         :return:
             new_xyz: (B, npoint, 3) tensor of the new features' xyz
             new_features: (B, npoint, sum_k(mlps[k][-1])) tensor of the new_features descriptors
@@ -156,7 +153,6 @@ class PointnetSAModuleMSG_SSD(_PointnetSAModuleBase):
         # 用不同的采样方法 多次采样
         for i in range(len(self.fps_types)):
             fps_type = self.fps_types[i]
-            print(self.fps_ranges)
             fps_range = self.fps_ranges[i]
 
             npoint = self.npoint[i]

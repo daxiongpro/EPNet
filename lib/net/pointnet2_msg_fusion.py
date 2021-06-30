@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -47,7 +49,6 @@ class FusionConv(nn.Module):
         self.bn1 = torch.nn.BatchNorm1d(outplanes)
 
     def forward(self, point_features, img_features):
-        # print(point_features.shape, img_features.shape)
         fusion_features = torch.cat([point_features, img_features], dim=1)
         fusion_features = F.relu(self.bn1(self.conv1(fusion_features)))
         return fusion_features
@@ -78,7 +79,6 @@ class ImageAttentionLayer(nn.Module):
         batch = img_feas.size(0)
         img_feas_f = img_feas.transpose(1, 2).contiguous().view(-1, self.ic)  # BCN->BNC->(BN)C
         point_feas_f = point_feas.transpose(1, 2).contiguous().view(-1, self.pc)  # BCN->BNC->(BN)C'
-        # print(img_feas)
         ri = self.fc1(img_feas_f)
         rp = self.fc2(point_feas_f)
         # att = F.sigmoid(self.fc3(F.tanh(ri + rp)))  # BNx1
@@ -123,56 +123,51 @@ def feature_gather(feature_map, xy):
     """
     # xy(B,N,2)->(B,1,N,2)
     xy = xy.unsqueeze(1)
-    interpolate_feature = grid_sample(feature_map, xy)  # (B,C,1,N)
+    interpolate_feature = grid_sample(feature_map, xy, align_corners=True)  # (B,C,1,N)
     return interpolate_feature.squeeze(2)  # (B,C,N)
 
 
 # 融合Lidar、点云特征；backbone
 class Pointnet2MSGImgFusion(nn.Module):
-    def __init__(self, use_xyz=True):
+
+    # 多个SA，每个参数是一个列表。列表长度是SA个数
+    def __init__(self,
+                 npoints: List[List[int]],
+                 radii: List[List[float]],
+                 nsamples: List[List[int]],
+                 mlps: List[List[List[int]]],
+                 fps_type: List[List[str]],
+                 fps_range: List[List[int]],
+                 point_out_channels: List[List[int]],  # 每个SA输出的Point的通道数（特征长度）
+                 img_channels: List[int]):
+
+        assert len(npoints) == len(radii) == len(nsamples) == len(mlps) == len(fps_type) == len(
+            point_out_channels)
         super().__init__()
+
         self.SA_modules = nn.ModuleList()  # point backbone
         self.Img_Block = nn.ModuleList()  # img backbone
         self.Fusion_Conv = nn.ModuleList()  # fusion_layer
-        # mlps = [[[16, 16, 32], [32, 32, 64]],  # [16, 16, 32], [16, 16, 32]。第一个MLP不知道为啥维度不同
-        #         [[64, 64, 128], [64, 96, 128]],
-        #         [[128, 196, 256], [128, 196, 256]],
-        #         [[256, 256, 512], [256, 384, 512]]]
-        mlps = [[[1, 16, 64], [1, 16, 64]],  # [16, 16, 32], [16, 16, 32]。第一个MLP不知道为啥维度不同
-                [[64, 64, 128], [64, 96, 128]],
-                [[128, 196, 256], [128, 196, 256]],
-                [[256, 256, 512], [256, 384, 512]]]
-        # npoints = [4096, 1024, 256, 64]
-        npoints = [[4096], [512], [256, 256], [256, 0], [-1], [256]]
-        radius = [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
-        nsample = [[16, 32], [16, 32], [16, 32], [16, 32]]
-        fps_type = [['D-FPS'], ['FS'], ['F-FPS', 'D-FPS'], ['F-FPS', 'D-FPS'], [], ['D-FPS']]
-        fps_range = [[-1], [-1], [512, -1], [256, -1], [-1], [-1]]
-        # aggreation_channel = [64, 128, 256, 256, -1, 512]
-        point_channels = [64, 128, 256, 256, -1, 512]
 
-        for k in range(4):  # 4个SA
+        for k in range(len(npoints)):  # 4个SA
             self.SA_modules.append(
                 PointnetSAModuleMSG_SSD(
                     npoint=npoints[k],
-                    radii=radius[k],
-                    nsamples=nsample[k],
+                    radii=radii[k],
+                    nsamples=nsamples[k],
                     mlps=mlps[k],
-                    # out_channle=aggreation_channel[k],
-                    out_channle=point_channels[k],
-                    use_xyz=use_xyz,
+                    out_channle=point_out_channels[k],
                     fps_type=fps_type[k],
                     fps_range=fps_range[k]
                 )
             )
 
         # Img backbone and fusion layer
-        img_channels = [3, 64, 128, 256, 512]
         for i in range(len(img_channels) - 1):  # [3, 64, 128, 256, 512]
             self.Img_Block.append(
                 BasicBlock(img_channels[i], img_channels[i + 1], stride=1))
             self.Fusion_Conv.append(
-                AttenFusionConv(img_channels[i + 1], point_channels[i], point_channels[i]))
+                AttenFusionConv(img_channels[i + 1], point_out_channels[i], point_out_channels[i]))
 
     @staticmethod
     def _break_up_pc(pc):
@@ -226,8 +221,7 @@ class Pointnet2MSGImgFusion(nn.Module):
             l_xy_cor[i]：上一层点云在img中的xy坐标
             li_index：下一层点云在上一层点云中的位置index
             返回：下一层点云在img中的xy坐标
-            """
-            """
+            eg:
             torch.gather(input: Tensor, 
                         dim: _int, 
                         index: Tensor)

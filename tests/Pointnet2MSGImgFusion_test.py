@@ -6,7 +6,18 @@ from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
 from lib.net.pointnet2_msg_fusion import Pointnet2MSGImgFusion
 from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG_SSD
 
-net = Pointnet2MSGImgFusion().cuda()
+npoints = [[4096], [512], [256, 256], [256, 0]]
+radii = [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
+nsamples = [[16, 32], [16, 32], [16, 32], [16, 32]]
+mlps = [[[1, 16, 64], [1, 16, 64]], [[64, 64, 128], [64, 96, 128]], [[128, 196, 256], [128, 196, 256]],
+        [[256, 256, 512], [256, 384, 512]]]  # [16, 16, 32], [16, 16, 32]。第一个MLP不知道为啥维度不同
+use_xyz: bool = True
+fps_type = [['D-FPS'], ['FS'], ['F-FPS', 'D-FPS'], ['F-FPS', 'D-FPS']]
+fps_range = [[-1], [-1], [512, -1], [256, -1]]
+point_channels = [64, 128, 256, 256]
+img_channels = [3, 64, 128, 256, 512]
+
+net = Pointnet2MSGImgFusion(npoints, radii, nsamples, mlps, fps_type, fps_range, point_channels, img_channels).cuda()
 DATA_PATH = '../data'
 train_set = KittiSSDDataset(root_dir=DATA_PATH,
                             npoints=cfg.RPN.NUM_POINTS,
