@@ -192,6 +192,7 @@ class SALayer(_PointnetSAModuleBase):
         if len(self.groupers) > 0:
             # 多尺度MSG
             for i in range(len(self.groupers)):
+                # 寻找以new_xyz为中心，r为半径，范围内的nsample个点。一共npoint个中心
                 new_features = self.groupers[i](xyz, new_xyz, features)  # (B, C, npoint, nsample)
 
                 new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample)

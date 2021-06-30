@@ -16,7 +16,7 @@ class PISSD(nn.Module):
                                         fusion_layer_cfg.fps_range,
                                         fusion_layer_cfg.point_channels,
                                         fusion_layer_cfg.img_channels).cuda()
-        self.vote_layer = CGLayer()
+        self.cg_layer = CGLayer(vote_layer_cfg.cg_mlp)
 
     def forward(self, input_data):
         """
@@ -28,6 +28,8 @@ class PISSD(nn.Module):
         xy_input = input_data['pts_origin_xy']
         # 将图片融合进模型
         backbone_xyz, backbone_features = self.backbone_net(pts_input, img_input, xy_input)  # (B, N, 3), (B, C, N)
+        candidate_xyz = self.cg_layer(backbone_xyz)
+
 
         # 分类头和回归头
         rpn_cls = self.rpn_cls_layer(backbone_features).transpose(1, 2).contiguous()  # (B, N, 1)
