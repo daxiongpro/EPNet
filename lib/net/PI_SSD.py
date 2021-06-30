@@ -1,15 +1,22 @@
 import torch.nn as nn
 from lib.config import cfg
+from lib.net.CG_layer import CGLayer
 from lib.net.fusion_layer import FusionLayer
 
 
 class PISSD(nn.Module):
-    def __init__(self, use_xyz=True, mode='TRAIN'):
+    def __init__(self, fusion_layer_cfg, vote_layer_cfg):
         super().__init__()
 
-        input_channels = int(cfg.RPN.USE_INTENSITY) + 3 * int(cfg.RPN.USE_RGB)
-        self.backbone_net = FusionLayer(input_channels=input_channels, use_xyz=use_xyz)
-        self.vote_layer = Vote_layer()
+        self.backbone_net = FusionLayer(fusion_layer_cfg.npoints,
+                                        fusion_layer_cfg.radii,
+                                        fusion_layer_cfg.nsamples,
+                                        fusion_layer_cfg.mlps,
+                                        fusion_layer_cfg.fps_type,
+                                        fusion_layer_cfg.fps_range,
+                                        fusion_layer_cfg.point_channels,
+                                        fusion_layer_cfg.img_channels).cuda()
+        self.vote_layer = CGLayer()
 
     def forward(self, input_data):
         """

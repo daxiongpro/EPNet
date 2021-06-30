@@ -111,6 +111,8 @@ class SALayer(_PointnetSAModuleBase):
             shared_mlps = []
             for k in range(len(mlp_spec) - 1):
                 shared_mlps.extend([
+                    # 为啥用 condv2d？
+                    # 答：把 npoint，nsamples 看成图像平面，C看成通道数
                     nn.Conv2d(mlp_spec[k], mlp_spec[k + 1], kernel_size=1, bias=False),
                     nn.BatchNorm2d(mlp_spec[k + 1]),
                     nn.ReLU()
@@ -123,7 +125,7 @@ class SALayer(_PointnetSAModuleBase):
             in_channel = 0
             # 多个尺度的feature拼接
             for mlp_tmp in mlps:
-                in_channel += mlp_tmp[-1]
+                in_channel += mlp_tmp[-1]  # 多个尺度拼接后的输入维度
             shared_mlps = []
             shared_mlps.extend([
                 nn.Conv1d(in_channel, out_channle, kernel_size=1, bias=False),
@@ -188,6 +190,7 @@ class SALayer(_PointnetSAModuleBase):
 
         # 获取new_features
         if len(self.groupers) > 0:
+            # 多尺度MSG
             for i in range(len(self.groupers)):
                 new_features = self.groupers[i](xyz, new_xyz, features)  # (B, C, npoint, nsample)
 
