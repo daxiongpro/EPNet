@@ -16,7 +16,7 @@ class PISSD(nn.Module):
                                         fusion_layer_cfg.fps_range,
                                         fusion_layer_cfg.point_channels,
                                         fusion_layer_cfg.img_channels).cuda()
-        self.cg_layer = CGLayer(vote_layer_cfg.cg_mlp)
+        self.cg_layer = CGLayer(vote_layer_cfg.cg_mlp,,
 
     def forward(self, input_data):
         """

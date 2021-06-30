@@ -208,6 +208,15 @@ __C.TEST.BBOX_AVG_BY_BIN = True
 __C.TEST.RY_WITH_BIN = False
 
 
+#  自己加的config
+# CG_Layer 的config
+__C.CG_LAYER = edict()
+__C.CG_LAYER.SHIFT_MLP = [3, 16, 3]
+__C.CG_LAYER.GROUP_CFG = {'radius': 0.2, 'nsample': 100, 'npoint': 10}
+__C.CG_LAYER.MLP = [67, 128, 64]
+
+
+
 def cfg_from_file(filename):
     """Load a config file and merge it into the default options."""
     import yaml
