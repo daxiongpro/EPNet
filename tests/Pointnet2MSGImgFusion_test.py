@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 
 from lib.config import cfg
 from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
-from lib.net.pointnet2_msg_fusion import FusionLayer
+from lib.net.fusion_layer import FusionLayer
 from pointnet2_lib.pointnet2.pointnet2_modules import SALayer
 
 npoints = [[4096], [512], [256, 256], [256, 0]]
