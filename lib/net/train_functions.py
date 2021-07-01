@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import datasets.loss_utils as loss_utils
+import lib.utils.loss_utils as loss_utils
 from lib.config import cfg
 from collections import namedtuple
 
