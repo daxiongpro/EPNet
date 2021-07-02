@@ -116,14 +116,14 @@ class AttenFusionConv(nn.Module):
 
 def feature_gather(feature_map, xy):
     """获取feature_map上 xy点的特征
-    :param xy:(B,N,2)  normalize to [-1,1]
+    :param xy:(B,M,2)  normalize to [-1,1]
     :param feature_map:(B,C,H,W)
     :return:
     """
-    # xy(B,N,2)->(B,1,N,2)
+    # xy(B,M,2)->(B,1,M,2)
     xy = xy.unsqueeze(1)
-    interpolate_feature = grid_sample(feature_map, xy, align_corners=True)  # (B,C,1,N)
-    return interpolate_feature.squeeze(2)  # (B,C,N)
+    interpolate_feature = grid_sample(feature_map, xy, align_corners=True)  # (B,C,1,M)
+    return interpolate_feature.squeeze(2)  # (B,C,M)
 
 
 # 融合Lidar、点云特征；backbone
@@ -137,18 +137,18 @@ class FusionLayer(nn.Module):
                  mlps: List[List[List[int]]],
                  fps_type: List[List[str]],
                  fps_range: List[List[int]],
-                 point_out_channels: List[List[int]],  # 每个SA输出的Point的通道数（特征长度）
+                 point_out_channels: List[int],  # 每个SA输出的Point的通道数（特征长度）
                  img_channels: List[int]):
 
         assert len(npoints) == len(radii) == len(nsamples) == len(mlps) == len(fps_type) == len(
-            point_out_channels)
+            point_out_channels)  # SA个数
         super().__init__()
 
         self.SA_modules = nn.ModuleList()  # point backbone
         self.Img_Block = nn.ModuleList()  # img backbone
         self.Fusion_Conv = nn.ModuleList()  # fusion_layer
 
-        for k in range(len(npoints)):  # 4个SA
+        for k in range(len(npoints)):  # 3个SA
             self.SA_modules.append(
                 SALayer(
                     npoint=npoints[k],
@@ -184,18 +184,21 @@ class FusionLayer(nn.Module):
                 image=None,
                 xy=None):
         """
-
+        backbone，将img特征融合进pointnet++（SA_Layer）所得的点中
         @param pointcloud: 点云(B, N, xyzf)
         @param image: 图片(B, W, H)
         @param xy: 点云在图片上xy的坐标(B, N, 2)
-        @return: new_xzy:
+        @return:
+        new_xzy:
         new_feature:
         """
         xyz, features = self._break_up_pc(pointcloud)
         l_xyz, l_features = [xyz], [features]
+        l_features = [xyz]  # 对于kitti数据集，第一层的feature是反射强度
 
         """
         normalize xy to [-1,1]。为什么？
+        答：后面的grid_sample()需要将xy先归一化到(-1, 1)
         W为图片宽度
         x / W 取值范围(0, 1)
         x / W * 2 取值范围(0, 2)
@@ -215,7 +218,7 @@ class FusionLayer(nn.Module):
             li_xyz, li_features, li_index = self.SA_modules[i](l_xyz[i], l_features[i])
 
             li_index = li_index.long().unsqueeze(-1).repeat(1, 1, 2)
-            li_xy_cor = torch.gather(l_xy_cor[i], dim=1, index=li_index)  # (B, M, 2)
+            li_xy_cor = torch.gather(l_xy_cor[i], dim=1, index=li_index)  # 采样点的xy坐标。(B, M, 2)
             """
             l_xy_cor[i]：上一层点云在img中的xy坐标
             li_index：下一层点云在上一层点云中的位置index
@@ -251,3 +254,4 @@ class FusionLayer(nn.Module):
             l_features.append(li_features)
 
         return l_xyz[-1], l_features[-1]
+        # return li_xyz, li_features

@@ -6,6 +6,8 @@ import pointnet2_utils
 # from . import pytorch_utils as pt_utils
 from typing import List
 import pointnet2_utils as pointnet2_3DSSD
+
+
 def calc_square_dist(a, b, norm=True):
     """
     Calculating square distance between a and b
@@ -31,6 +33,7 @@ def calc_square_dist(a, b, norm=True):
         dist = a_square + b_square - 2 * coor
         # dist = torch.sqrt(dist)
     return dist
+
 
 # class _PointnetSAModuleBase(nn.Module):
 #
