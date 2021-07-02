@@ -1,6 +1,6 @@
 import torch
 # import pointnet2_cuda as pointnet2
-from pointnet2.pointnet2_modules import PointnetSAModuleMSG
+from pointnet2.fusion_SA_layer import PointnetSAModuleMSG
 
 net = PointnetSAModuleMSG(
     npoint=4096,  # [4096, 1024, 256, 64]

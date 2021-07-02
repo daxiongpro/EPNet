@@ -323,7 +323,7 @@ class KittiSSDDataset(KittiDataset):
         ----------------------------------------------label：
         'rpn_cls_label',分类标签
         'rpn_reg_label',回归标签(N,7)。判断这N 个点是否在box内部，若是则是这个点对应的box回归值
-        'gt_boxes3d'真实回归标签(1,7)
+        'gt_boxes3d'真实回归框(M,7)
         ])
         """
         sample_id = int(self.sample_id_list[index])

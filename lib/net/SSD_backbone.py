@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from pointnet2 import pointnet2_modules
+from pointnet2 import fusion_SA_layer
 
 
 class SSDBackbone(nn.Module):
@@ -31,7 +31,7 @@ class SSDBackbone(nn.Module):
                     mlps[idx] = [channel_in] + mlps[idx]
 
                 self.SA_modules.append(
-                    pointnet2_modules.SALayer(
+                    fusion_SA_layer.SALayer(
                         npoint=self.model_cfg.SA_CONFIG.NPOINTS[k],
                         radii=self.model_cfg.SA_CONFIG.RADIUS[k],
                         nsamples=self.model_cfg.SA_CONFIG.NSAMPLE[k],
@@ -45,9 +45,9 @@ class SSDBackbone(nn.Module):
                 )
 
             elif self.layer_types[k] == 'Vote_Layer':
-                self.SA_modules.append(pointnet2_modules.Vote_layer(mlp_list=self.model_cfg.SA_CONFIG.MLPS[k],
-                                                                    pre_channel=channel_out_list[self.layer_inputs[k]],
-                                                                    max_translate_range=self.max_translate_range))
+                self.SA_modules.append(fusion_SA_layer.Vote_layer(mlp_list=self.model_cfg.SA_CONFIG.MLPS[k],
+                                                                  pre_channel=channel_out_list[self.layer_inputs[k]],
+                                                                  max_translate_range=self.max_translate_range))
 
             channel_out_list.append(self.model_cfg.SA_CONFIG.AGGREATION_CHANNEL[k])
 

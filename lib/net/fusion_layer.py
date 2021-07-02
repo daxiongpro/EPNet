@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from torch.nn.functional import grid_sample
 
-from pointnet2.pointnet2_modules import SALayer
+from pointnet2.fusion_SA_layer import SALayer
 
 BatchNorm2d = nn.BatchNorm2d
 
