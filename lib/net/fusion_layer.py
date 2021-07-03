@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from torch.nn.functional import grid_sample
 
-from pointnet2.fusion_SA_layer import SALayer
+from fusion_SA_layer import SALayer
 
 BatchNorm2d = nn.BatchNorm2d
 
@@ -194,7 +194,7 @@ class FusionLayer(nn.Module):
         """
         xyz, features = self._break_up_pc(pointcloud)
         l_xyz, l_features = [xyz], [features]
-        l_features = [xyz]  # 对于kitti数据集，第一层的feature是反射强度
+        l_features = [xyz.transpose(1,2).contiguous()]  # 对于kitti数据集，第一层的feature是反射强度
 
         """
         normalize xy to [-1,1]。为什么？
@@ -255,3 +255,42 @@ class FusionLayer(nn.Module):
 
         return l_xyz[-1], l_features[-1]
         # return li_xyz, li_features
+
+
+if __name__ == '__main__':
+    B = 2
+    C_p = 4
+    C_i = 3
+    N = 16384
+    H = 600
+    W = 800
+    pointcloud = torch.randn(B, N, C_p + 3).cuda()
+    image = torch.randn(B, C_i, H, W).cuda()
+    xy = torch.randn(B, N, 2).cuda()
+
+    # fps参数
+    npoints = [[4096], [1024], [256, 256]]
+    fps_type = [['D-FPS'], ['FS'], ['F-FPS', 'D-FPS']]
+    fps_range = [[-1], [-1], [256, -1]]
+    # groups参数
+    radii = [[0.2, 0.4, 0.8], [0.4, 0.8, 1.6], [1.6, 3.2, 4.8]]
+    nsamples = [[32, 32, 64], [32, 32, 64], [32, 32, 32]]
+    point_out_channels = [128, 256, 256]
+    # mlp参数
+
+    mlps = [[[3+3, 32, 32, 64], [3+3, 64, 64, 128], [3+3, 64, 96, 128]],
+            [[128+3, 64, 64, 128], [128+3, 128, 128, 256], [128+3, 128, 128, 256]],
+            [[256+3, 128, 128, 256], [256+3, 128, 128, 256], [256+3, 128, 256, 256]]]
+
+    img_channels = [3, 64, 128, 256]
+    net = FusionLayer(npoints=npoints,
+                      fps_type=fps_type,
+                      fps_range=fps_range,
+                      radii=radii,
+                      nsamples=nsamples,
+                      mlps=mlps,
+                      point_out_channels=point_out_channels,
+                      img_channels=img_channels).cuda()
+
+    li_xyz, li_features = net(pointcloud, image, xy)
+    print(li_xyz.shape, li_features.shape)

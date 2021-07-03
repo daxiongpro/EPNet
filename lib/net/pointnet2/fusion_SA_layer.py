@@ -265,11 +265,15 @@ if __name__ == '__main__':
     input.xyz = xyz.cuda()
     input.feature = feature.cuda()
 
-    net = SALayer(npoint=[2048, 2048], fps_type=['D-FPS', 'F-FPS'], fps_range=[2048, -1],
-                  radii=[0.2, 0.4, 0.8], nsamples=[16, 32, 32], out_channle=128,
-                  mlps=[[4+3, 32, 32, 64],
-                        [4+3, 64, 64, 128],
-                        [4+3, 64, 96, 128]]).cuda()
+    net = SALayer(
+        # fps参数
+        npoint=[2048, 2048], fps_type=['D-FPS', 'F-FPS'], fps_range=[2048, -1],
+        # groups参数
+        radii=[0.2, 0.4, 0.8], nsamples=[16, 32, 32], out_channle=128,
+        # mlp参数
+        mlps=[[4 + 3, 32, 32, 64],
+              [4 + 3, 64, 64, 128],
+              [4 + 3, 64, 96, 128]]).cuda()
     new_xyz, new_features, fps_idxes = net(input.xyz, input.feature)
     print(new_xyz.shape)
     print(new_features.shape)

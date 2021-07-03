@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from pointnet2 import fusion_SA_layer
+import fusion_SA_layer
 
 
 class SSDBackbone(nn.Module):

@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-import pointnet2.pointnet2_utils as pointnet2_3DSSD
+import pointnet2_utils as pointnet2_3DSSD
 import torch.nn.functional as F
 
 
