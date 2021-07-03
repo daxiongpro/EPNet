@@ -152,6 +152,7 @@ class SALayer(nn.Module):
             self.mlps.append(nn.Sequential(*shared_mlps))  # 每个尺度的MLP
 
         # 大的mlp
+        assert out_channle != -1
         if out_channle != -1 and len(self.mlps) > 0:
             in_channel = 0
             # 多个尺度的feature拼接
@@ -249,3 +250,27 @@ class SALayer(nn.Module):
 
         return new_xyz, new_features, fps_idxes
         # (B, npoint, 3), # (B, out_channle, npoint),
+
+
+if __name__ == '__main__':
+    B = 2
+    C = 4
+    N = 16384
+    xyz = torch.randn(B, N, 3)
+    feature = torch.rand(B, C, N)
+
+    from easydict import EasyDict as edict
+
+    input = edict()
+    input.xyz = xyz.cuda()
+    input.feature = feature.cuda()
+
+    net = SALayer(npoint=[2048, 2048], fps_type=['D-FPS', 'F-FPS'], fps_range=[2048, -1],
+                  radii=[0.2, 0.4, 0.8], nsamples=[16, 32, 32], out_channle=128,
+                  mlps=[[4+3, 32, 32, 64],
+                        [4+3, 64, 64, 128],
+                        [4+3, 64, 96, 128]]).cuda()
+    new_xyz, new_features, fps_idxes = net(input.xyz, input.feature)
+    print(new_xyz.shape)
+    print(new_features.shape)
+    print(fps_idxes.shape)
