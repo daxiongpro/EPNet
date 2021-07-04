@@ -56,21 +56,21 @@ class CGLayer(nn.Module):
         # shift
 
         xyz_shift = self.shift_layer(ffps_feature).transpose(1, 2).contiguous()  # (B, N, 3)
-        ffps_xyz = ffps_xyz + xyz_shift
+        candidate_xyz = ffps_xyz + xyz_shift
 
         # group
-        group_featuers = self.group_layer(backbone_xyz, ffps_xyz, backbone_features)  # (B, 256+3, 256, nsample)
-        assert cfg.cg_layer.mlp[0] == group_featuers.size(1)  # 下面的mlp的第一个维度 == C+3
+        candidate_featuers = self.group_layer(backbone_xyz, candidate_xyz, backbone_features)  # (B, 256+3, 256, nsample)
+        assert cfg.cg_layer.mlp[0] == candidate_featuers.size(1)  # 下面的mlp的第一个维度 == C+3
         # mlp
-        group_featuers = self.mlp(group_featuers)  # (B, 256, 256, nsample)
+        candidate_featuers = self.mlp(candidate_featuers)  # (B, 256, 256, nsample)
 
         # max_pool
         new_features = F.max_pool2d(
-            group_featuers, kernel_size=[1, group_featuers.size(3)]
+            candidate_featuers, kernel_size=[1, candidate_featuers.size(3)]
         )  # (B, mlp[-1], npoint, 1)
         new_features = new_features.squeeze(-1)  # (B, mlp[-1], npoint)
 
-        return new_features.transpose(1, 2).contiguous()  # (B, npoint, mlp[-1])
+        return candidate_xyz, new_features.transpose(1, 2).contiguous()  # (B, M ,3) = (B, 256, 3), (B, npoint, mlp[-1])
 
 
 if __name__ == '__main__':

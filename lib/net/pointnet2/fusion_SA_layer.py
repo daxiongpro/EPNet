@@ -212,8 +212,8 @@ class SALayer(nn.Module):
                 features_SSD = torch.cat([xyz_tmp, feature_tmp], dim=-1)
                 features_for_fps_distance = calc_square_dist(features_SSD, features_SSD)
                 features_for_fps_distance = features_for_fps_distance.contiguous()
-                fps_idx_1 = pointnet2_3DSSD.furthest_point_sample_with_dist(features_for_fps_distance, npoint)
-                fps_idx_2 = pointnet2_3DSSD.furthest_point_sample(xyz_tmp, npoint)
+                fps_idx_1 = pointnet2_3DSSD.furthest_point_sample_with_dist(features_for_fps_distance, npoint // 2)
+                fps_idx_2 = pointnet2_3DSSD.furthest_point_sample(xyz_tmp, npoint // 2)
                 fps_idx = torch.cat([fps_idx_1, fps_idx_2], dim=-1)  # [bs, npoint * 2]
             fps_idxes.append(fps_idx)
         fps_idxes = torch.cat(fps_idxes, dim=-1)

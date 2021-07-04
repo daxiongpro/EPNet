@@ -57,7 +57,6 @@ class FusionConv(nn.Module):
 class ImageAttentionLayer(nn.Module):
     # image-attention 层。由图片和点云生成权值，乘到img特征上
     def __init__(self, channels):
-        print('##############ADDITION ATTENTION(ADD)#########')
         super(ImageAttentionLayer, self).__init__()
         self.ic, self.pc = channels  # 图像通道数，点云通道数
         rc = self.pc // 4  # 统一成rc通道
@@ -194,7 +193,7 @@ class FusionLayer(nn.Module):
         """
         xyz, features = self._break_up_pc(pointcloud)
         l_xyz, l_features = [xyz], [features]
-        l_features = [xyz.transpose(1,2).contiguous()]  # 对于kitti数据集，第一层的feature是反射强度
+        l_features = [xyz.transpose(1, 2).contiguous()]  # 对于kitti数据集，第一层的feature是反射强度
 
         """
         normalize xy to [-1,1]。为什么？
@@ -217,7 +216,19 @@ class FusionLayer(nn.Module):
             # li_index: 采样的点在原来的点云中的index
             li_xyz, li_features, li_index = self.SA_modules[i](l_xyz[i], l_features[i])
 
+            """
+            获取采样点在最初 16384 个点上的index，后续编写损失函数的时候需要用。
+            dataset 的 __getitem__方法返回的回归标签为(B, N, 7) = (B, 16384, 7)。
+            而最后网络输出的为(B, 256, 7)， 即最终采样点个数为256个。
+            因此在采样过程中，需要记录下采样点在原始点云中的index
+            if i == 0:
+                li_origin_index = li_index
+            else:
+                li_origin_index = torch.gather(li_origin_index, dim=1, index=li_index)
+            """
+            li_origin_index = li_index if i == 0 else torch.gather(li_origin_index, dim=1, index=li_index.long())
             li_index = li_index.long().unsqueeze(-1).repeat(1, 1, 2)
+
             li_xy_cor = torch.gather(l_xy_cor[i], dim=1, index=li_index)  # 采样点的xy坐标。(B, M, 2)
             """
             l_xy_cor[i]：上一层点云在img中的xy坐标
@@ -253,7 +264,7 @@ class FusionLayer(nn.Module):
             l_xyz.append(li_xyz)
             l_features.append(li_features)
 
-        return l_xyz[-1], l_features[-1]
+        return l_xyz[-1], l_features[-1], li_origin_index
         # return li_xyz, li_features
 
 
@@ -278,9 +289,9 @@ if __name__ == '__main__':
     point_out_channels = [128, 256, 256]
     # mlp参数
 
-    mlps = [[[3+3, 32, 32, 64], [3+3, 64, 64, 128], [3+3, 64, 96, 128]],
-            [[128+3, 64, 64, 128], [128+3, 128, 128, 256], [128+3, 128, 128, 256]],
-            [[256+3, 128, 128, 256], [256+3, 128, 128, 256], [256+3, 128, 256, 256]]]
+    mlps = [[[3 + 3, 32, 32, 64], [3 + 3, 64, 64, 128], [3 + 3, 64, 96, 128]],
+            [[128 + 3, 64, 64, 128], [128 + 3, 128, 128, 256], [128 + 3, 128, 128, 256]],
+            [[256 + 3, 128, 128, 256], [256 + 3, 128, 128, 256], [256 + 3, 128, 256, 256]]]
 
     img_channels = [3, 64, 128, 256]
     net = FusionLayer(npoints=npoints,
@@ -292,5 +303,5 @@ if __name__ == '__main__':
                       point_out_channels=point_out_channels,
                       img_channels=img_channels).cuda()
 
-    li_xyz, li_features = net(pointcloud, image, xy)
-    print(li_xyz.shape, li_features.shape)
+    li_xyz, li_features, li_origin_index = net(pointcloud, image, xy)
+    print(li_xyz.shape, li_features.shape, li_origin_index.shape)
