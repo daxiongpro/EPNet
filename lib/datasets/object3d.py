@@ -17,10 +17,12 @@ class Object3d(object):
         self.trucation = float(label[1])
         self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
         self.alpha = float(label[3])
+        # 目标2D框的像素位置.形式为xyxy，分别为左上点的x, y，右下点的x, y。
         self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype=np.float32)
         self.h = float(label[8])
         self.w = float(label[9])
         self.l = float(label[10])
+        # 第12-14表示目标3D中心在相机坐标下的xyz坐标。
         self.pos = np.array((float(label[11]), float(label[12]), float(label[13])), dtype=np.float32)
         self.dis_to_cam = np.linalg.norm(self.pos)
         self.ry = float(label[14])
