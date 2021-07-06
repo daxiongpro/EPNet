@@ -57,14 +57,18 @@ class PISSD(nn.Module):
                         'candidate_features': (B, C, N)}
         """
         pts_input = torch.from_numpy(input_data['pts_input']).cuda()
-        img_input = torch.from_numpy(input_data['img']).permute(0,3,1,2).contiguous().cuda()
+        img_input = torch.from_numpy(input_data['img']).float().permute(0, 3, 1, 2).contiguous().cuda()
         xy_input = torch.from_numpy(input_data['pts_origin_xy']).cuda()
 
-
         # 将图片融合进模型
-        backbone_xyz, backbone_features = self.backbone_net(pts_input, img_input,
-                                                            xy_input)  # (B, N, 3), (B, C, N)=(B, 512,3) (B, 256,512)
-        candidate_xyz, candidate_features = self.cg_layer(backbone_features)  # (B, C, N) = (B, 128, 256)
+        backbone_xyz, backbone_features, li_origin_index = \
+            self.backbone_net(pts_input, img_input, xy_input)  # (B, N, 3), (B, C, N)=(B, 512,3) (B, 256,512)
+        ffps_xyz = backbone_xyz[:, backbone_xyz.shape[1] // 2:, :]  # 取f-fps采样的点(前一半的点)，送到cg layer里面
+        ffps_features = backbone_features[:, :, backbone_features.shape[2] // 2:]
+        candidate_xyz, candidate_features = self.cg_layer(ffps_xyz=ffps_xyz,
+                                                          ffps_feature=ffps_features,
+                                                          backbone_xyz=backbone_xyz,
+                                                          backbone_features=backbone_features)  # (B, C, N) = (B, 128, 256)
 
         # 分类头和回归头
         rpn_cls = self.cls_head(candidate_features).transpose(1, 2).contiguous()  # (B, N, 1)
@@ -79,7 +83,7 @@ class PISSD(nn.Module):
 
 
 if __name__ == '__main__':
-    net = PISSD()
+    net = PISSD().cuda()
     DATA_PATH = os.path.join('../', '..', 'data')
     train_set = KittiSSDDataset(root_dir=DATA_PATH,
                                 npoints=16384,

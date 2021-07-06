@@ -1,7 +1,8 @@
 import torch.nn as nn
 import torch
-import pointnet2_utils as pointnet2_3DSSD
 import torch.nn.functional as F
+import pointnet2_utils as pointnet2_3DSSD
+from lib.pissd_config import cfg
 
 
 class CGLayer(nn.Module):
@@ -40,7 +41,8 @@ class CGLayer(nn.Module):
             ])
         self.mlp = nn.Sequential(*shared_mlps)
 
-    def forward(self, ffps_xyz: torch.Tensor,
+    def forward(self,
+                ffps_xyz: torch.Tensor,
                 ffps_feature: torch.Tensor,
                 backbone_xyz: torch.Tensor,
                 backbone_features: torch.Tensor):
@@ -59,7 +61,8 @@ class CGLayer(nn.Module):
         candidate_xyz = ffps_xyz + xyz_shift
 
         # group
-        candidate_featuers = self.group_layer(backbone_xyz, candidate_xyz, backbone_features)  # (B, 256+3, 256, nsample)
+        candidate_featuers = self.group_layer(backbone_xyz, candidate_xyz,
+                                              backbone_features)  # (B, 256+3, 256, nsample)
         assert cfg.cg_layer.mlp[0] == candidate_featuers.size(1)  # 下面的mlp的第一个维度 == C+3
         # mlp
         candidate_featuers = self.mlp(candidate_featuers)  # (B, 256, 256, nsample)
@@ -70,11 +73,12 @@ class CGLayer(nn.Module):
         )  # (B, mlp[-1], npoint, 1)
         new_features = new_features.squeeze(-1)  # (B, mlp[-1], npoint)
 
-        return candidate_xyz, new_features.transpose(1, 2).contiguous()  # (B, M ,3) = (B, 256, 3), (B, npoint, mlp[-1])
+        return candidate_xyz, new_features  # (B, M ,3) = (B, 256, 3), (B, mlp[-1], npoint)
 
 
 if __name__ == '__main__':
     from easydict import EasyDict as edict
+
     cfg = edict()
     cfg.cg_layer = edict()
     cfg.cg_layer.shift_mlp = [256, 128, 64, 3]
@@ -82,7 +86,7 @@ if __name__ == '__main__':
     cfg.cg_layer.group_cfg.radius = 4
     cfg.cg_layer.group_cfg.nsample = 32
     cfg.cg_layer.group_cfg.npoint = 256
-    cfg.cg_layer.mlp = [256+3, 128, 128]
+    cfg.cg_layer.mlp = [256 + 3, 128, 128]
 
     B = 2
     N = 10000
