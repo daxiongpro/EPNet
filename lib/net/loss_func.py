@@ -41,23 +41,28 @@ class RegLoss(nn.Module):
         @param target:(B, N, 7)
         @return:
         """
-        smooth_l1_loss = nn.SmoothL1Loss()
+        B, N, _ = out.size()
 
+        # smooth_l1_loss = nn.SmoothL1Loss(reduction='none')#保留给batch维度(B,N,...)
+        smooth_l1_loss = nn.SmoothL1Loss()  # 计算batch中所有的loss平均值
 
         # -------------------------------------计算L_dist
         predict_xyz = out[:, :, 0:3]
         label_xyz = target[:, :, 0:3]
-        L_dist = smooth_l1_loss(predict_xyz, label_xyz)  # 单个值
+        L_dist = (predict_xyz - label_xyz) ** 2  # B,N,3
+        L_dist = torch.sum(L_dist, dim=2)  # B,N
+        L_dist = torch.sqrt(L_dist)  # B,N
+        L_dist = smooth_l1_loss(L_dist, torch.zeros((B, N)))  # 距离越小越好，拟合全零
 
         # -------------------------------------计算L_size
         h, w, l = out[:, :, 4], out[:, :, 5], out[:, :, 6]
         predict_size = h * w * l
         h, w, l = target[:, :, 4], target[:, :, 5], target[:, :, 6]
         label_size = h * w * l
-        L_size = SmoothL1Loss(predict_size, label_size)  # (B, N, 1)
+        L_size = smooth_l1_loss(predict_size, label_size)  # (B, N, 1) 大小要拟合label
 
         # -------------------------------------计算L_angle
-        L_angle = SmoothL1Loss(out[:, :, 6], target[:, :, 6])
+        L_angle = smooth_l1_loss(out[:, :, 6], target[:, :, 6])  # 角度拟合label
 
         # -------------------------------------计算L_corner
         """
@@ -69,7 +74,7 @@ class RegLoss(nn.Module):
               |/         |/
               2 -------- 1
         """
-        B, N, _ = out.size()
+
         """
         boxes_to_corners_3d的输入为(N, 7).
         因此先把(B, N, 7)转换成(B * N, 7)
@@ -77,13 +82,21 @@ class RegLoss(nn.Module):
         """
         out_corner = boxes_to_corners_3d(out.reshape(B * N, 7)).reshape(B, N, 8, 3)
         target_corner = boxes_to_corners_3d(out.reshape(B * N, 7)).reshape(B, N, 8, 3)
-        corner_dist = torch.norm(out_corner - target_corner, p=2, dim=3)  # 绝对值loss.(B, N, 8)
-        L_corner = torch.sum(corner_dist, dim=2)  # (B, N)
+        dis = (out_corner - target_corner) ** 2
+        dis = torch.sum(dis, dim=3)  # (B,N,8)
+        dis = torch.sqrt(dis)
+        dis = torch.sum(dis, dim=2)  # (B,N)
+
+        # corner_dist = torch.norm(out_corner - target_corner, p=2, dim=3)  # 绝对值loss.(B, N, 8)
+        L_corner = smooth_l1_loss(dis, torch.zeros(B, N))  # 单个值
+
+        loss = L_dist + L_size + L_angle + L_corner
+        return loss
 
 
 class ShiftLoss(nn.Module):
-    def __init__(self):
-        pass
+    def __init__(self, N_p):
+        self.N_p = N_p
 
     def forward(self, x, target):
         """
@@ -92,11 +105,20 @@ class ShiftLoss(nn.Module):
         @param target:(B, N, 3) 非物体的中心的点标0
         @return:
         """
-        pass
+        B, N, _ = out.size()
+        smooth_l1_loss = nn.SmoothL1Loss()  # 计算batch中所有的loss平均值
+
+        L_dist = (x - target) ** 2  # B,N,3
+        L_dist = torch.sum(L_dist, dim=2)  # B,N
+        L_dist = torch.sqrt(L_dist)  # B,N
+        L_dist = smooth_l1_loss(L_dist, torch.zeros((B, N)))  # 距离越小越好，拟合全零
+        loss = L_dist
+        return loss
 
 
 if __name__ == '__main__':
     out = torch.rand((2, 1024, 7))
     target = torch.rand((2, 1024, 7))
-    cre = RegLoss(1)
+    cre = RegLoss(2)
     l = cre(out, target)
+    print(l)
