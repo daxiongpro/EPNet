@@ -10,6 +10,7 @@ from lib.utils.loss_utils import boxes_to_corners_3d
 class ClsLoss(nn.Module):
     def __init__(self, Nc):
         self.Nc = Nc  # candidate 点的总数
+        super(ClsLoss, self).__init__()
 
     def forward(self, x, target):
         """
@@ -18,10 +19,11 @@ class ClsLoss(nn.Module):
         @param target: (B, N)。标签
         @return: loss(B, N)
         """
+        cross_entropy_loss = nn.CrossEntropyLoss()
+        B, N, C = x.size()
 
-        cls_loss = nn.CrossEntropyLoss(x, target)
-        cls_loss = torch.sum(cls_loss, dim=1)
-        cls_loss = cls_loss / self.Nc
+        cls_loss = cross_entropy_loss(x.reshape(B*N, C), target.reshape(B*N))
+
         return cls_loss
 
 
@@ -97,6 +99,7 @@ class RegLoss(nn.Module):
 class ShiftLoss(nn.Module):
     def __init__(self, N_p):
         self.N_p = N_p
+        super(ShiftLoss, self).__init__()
 
     def forward(self, x, target):
         """
@@ -130,30 +133,30 @@ class Loss(nn.Module):
         'candidate_features': (B, C, N)
 
         @param label:
-        'rpn_cls_label',(B, N)
-        'rpn_reg_label',(B, N, 7)
+        'cls_label',(B, N)
+        'reg_label',(B, N, 7)
 
         @return:
         """
         # 分类损失
-        pre_cls = output['cls_head'].squeeze(-1)  # (B,N,1)
-        label_cls = label['rpn_cls_label']
-        assert pre_cls[1] == label_cls[1]  # N的个数一样
-        B, N = pre_cls.size()
+        pre_cls = output['cls_head'].squeeze(-1)  # (B,N)
+        label_cls = label['cls_label'].long()
+        assert pre_cls.size(1) == label_cls.size(1)  # N的个数一样
+        B, N, _ = pre_cls.size()
         loss_fn = ClsLoss(N)
         cls_loss = loss_fn(pre_cls, label_cls)
 
         # 回归损失
         pre_reg = output['reg_head']
-        label_reg = label['rpn_reg_label']
-        assert pre_reg.size() == label_reg.size()
+        label_reg = label['reg_label']
+        assert pre_reg.size(1) == label_reg.size(1)
         B, N, _ = pre_reg.size()
         loss_fn = RegLoss(N)
         reg_loss = loss_fn(pre_reg, label_reg)
 
         # shift损失
         pre_shift = output['candidate_xyz']  # BN3
-        label_shift = label['rpn_reg_label'][:, :, 0:3]  # BN3
+        label_shift = label['reg_label'][:, :, 0:3]  # BN3
         assert pre_shift.size() == label_shift.size()
         B, N, _ = pre_shift.size()
         loss_fn = ShiftLoss(N)

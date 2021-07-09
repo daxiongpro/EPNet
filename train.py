@@ -28,19 +28,39 @@ def create_dataloader():
     return train_loader
 
 
+def get_label(data, li_origin_index):
+    label = {}
+    cls_label = torch.from_numpy(data['rpn_cls_label']).cuda()
+    cls_label = torch.gather(cls_label, dim=1, index=li_origin_index.long())  # B, N=1,256.
+
+    reg_label = torch.from_numpy(data['rpn_reg_label']).cuda()
+    B, N, _ = reg_label.size()  # 1,16384,7
+    # reg_label = reg_label.reshape(B, N * _)  # 下面的torch.gather 必须要求换一下维度
+    reg_label = torch.gather(reg_label, dim=1, index=li_origin_index.long())
+
+    reg_label = reg_label.reshape(B, -1, _)
+
+    label['cls_label'] = cls_label.float()
+    label['reg_label'] = reg_label.float()
+
+    return label
+
+
 if __name__ == '__main__':
     epoch_num = 50
 
     train_loader = create_dataloader()
     net = PISSD()
-    net = nn.DataParallel(net)
+    # net = nn.DataParallel(net)  # 两个gpudebug不进去
     net = net.cuda()
 
     for epoch in range(epoch_num):
-        for i, input in enumerate(train_loader):
-            out = net(input)
+        for i, data in enumerate(train_loader):
+            out = net(data)
+            label = get_label(data, out['li_origin_index'])
+
             loss_fn = Loss()
-            loss = loss_fn(out, input)  # label 在input里面
+            loss = loss_fn(out, label)  # label 在input里面
             print('epoch', epoch, '-----i', i, '-----loss', loss)
             loss.backward()
         if (epoch + 1) % 5 == 0:

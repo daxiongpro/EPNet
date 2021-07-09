@@ -77,7 +77,8 @@ class PISSD(nn.Module):
         out_dict = {'cls_head': cls_head,
                     'reg_head': reg_head,
                     'candidate_xyz': candidate_xyz,
-                    'candidate_features': candidate_features}
+                    'candidate_features': candidate_features,
+                    'li_origin_index': li_origin_index[:, li_origin_index.shape[1] // 2:]}
 
         return out_dict
 

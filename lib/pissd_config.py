@@ -32,4 +32,4 @@ cfg.cg_layer.mlp = [256 + 3, 128, 128]
 # head config
 cfg.head = edict()
 cfg.head.reg_mlp = [128, 64, 7]
-cfg.head.cls_mlp = [128, 64, 1]
+cfg.head.cls_mlp = [128, 64, 3]  # 最后输出3类：背景、前景、ignore

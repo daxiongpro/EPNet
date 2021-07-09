@@ -27,7 +27,7 @@ class ClsHead(nn.Module):
     def __init__(self, mlp):
         """
         作二分类，前景框还是背景框
-        @param mlp: [128, 64, 1]
+        @param mlp: [128, 64, 3]
         """
         super(ClsHead, self).__init__()
         shared_mlps = []
@@ -36,11 +36,14 @@ class ClsHead(nn.Module):
                 nn.Conv1d(mlp[i], mlp[i + 1], kernel_size=1, bias=False),
                 nn.BatchNorm1d(mlp[i + 1]),
                 nn.ReLU()
+                # nn.Softmax(dim=2)
             ])
         self.mlp_layer = nn.Sequential(*shared_mlps)  # 获取candidate 坐标
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input):
         output = self.mlp_layer(input)
+        output = self.softmax(output)  # 分类用交叉熵损失函数值，必须压缩到0-1
         return output
 
 
