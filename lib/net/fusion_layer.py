@@ -214,7 +214,7 @@ class FusionLayer(nn.Module):
 
         for i in range(len(self.SA_modules)):
             # li_index: 采样的点在原来的点云中的index
-            li_xyz, li_features, li_index = self.SA_modules[i](l_xyz[i], l_features[i])
+            li_xyz, li_features, li_index = self.SA_modules[i](l_xyz[i], l_features[i])#///
 
             """
             获取采样点在最初 16384 个点上的index，后续编写损失函数的时候需要用。
@@ -258,7 +258,7 @@ class FusionLayer(nn.Module):
             image = self.Img_Block[i](img[i])
             # 获取点在图片上的特征。li_xy_cor为点的坐标
             img_gather_feature = feature_gather(image, li_xy_cor)
-            li_features = self.Fusion_Conv[i](li_features, img_gather_feature)
+            li_features = self.Fusion_Conv[i](li_features, img_gather_feature)#///
             l_xy_cor.append(li_xy_cor)
             img.append(image)
             l_xyz.append(li_xyz)

@@ -116,6 +116,54 @@ class ShiftLoss(nn.Module):
         return loss
 
 
+class Loss(nn.Module):
+    def __init__(self):
+        super(Loss, self).__init__()
+
+    def forward(self, output, label):
+        """
+
+        @param output:
+        'cls_head': (B, N, 1),
+        'reg_head': (B, N, 7),
+        'candidate_xyz': (B, N, 3),
+        'candidate_features': (B, C, N)
+
+        @param label:
+        'rpn_cls_label',(B, N)
+        'rpn_reg_label',(B, N, 7)
+
+        @return:
+        """
+        # 分类损失
+        pre_cls = output['cls_head'].squeeze(-1)  # (B,N,1)
+        label_cls = label['rpn_cls_label']
+        assert pre_cls[1] == label_cls[1]  # N的个数一样
+        B, N = pre_cls.size()
+        loss_fn = ClsLoss(N)
+        cls_loss = loss_fn(pre_cls, label_cls)
+
+        # 回归损失
+        pre_reg = output['reg_head']
+        label_reg = label['rpn_reg_label']
+        assert pre_reg.size() == label_reg.size()
+        B, N, _ = pre_reg.size()
+        loss_fn = RegLoss(N)
+        reg_loss = loss_fn(pre_reg, label_reg)
+
+        # shift损失
+        pre_shift = output['candidate_xyz']  # BN3
+        label_shift = label['rpn_reg_label'][:, :, 0:3]  # BN3
+        assert pre_shift.size() == label_shift.size()
+        B, N, _ = pre_shift.size()
+        loss_fn = ShiftLoss(N)
+        shift_loss = loss_fn(pre_shift, label_shift)
+
+        # 总loss
+        loss = cls_loss + reg_loss + shift_loss
+        return loss
+
+
 if __name__ == '__main__':
     out = torch.rand((2, 1024, 7))
     target = torch.rand((2, 1024, 7))

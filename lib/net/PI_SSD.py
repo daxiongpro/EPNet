@@ -71,11 +71,11 @@ class PISSD(nn.Module):
                                                           backbone_features=backbone_features)  # (B, C, N) = (B, 128, 256)
 
         # 分类头和回归头
-        rpn_cls = self.cls_head(candidate_features).transpose(1, 2).contiguous()  # (B, N, 1)
-        rpn_reg = self.reg_head(candidate_features).transpose(1, 2).contiguous()  # (B, N, 7)
+        cls_head = self.cls_head(candidate_features).transpose(1, 2).contiguous()  # (B, N, 1)
+        reg_head = self.reg_head(candidate_features).transpose(1, 2).contiguous()  # (B, N, 7)
 
-        out_dict = {'rpn_cls': rpn_cls,
-                    'rpn_reg': rpn_reg,
+        out_dict = {'cls_head': cls_head,
+                    'reg_head': reg_head,
                     'candidate_xyz': candidate_xyz,
                     'candidate_features': candidate_features}
 

@@ -22,7 +22,7 @@ def calc_square_dist(a, b, norm=True):
     a_square = torch.sum(a_square * a_square, dim=-1)  # [bs, n, 1]
     b_square = torch.sum(b_square * b_square, dim=-1)  # [bs, 1, m]
     a_square = a_square.repeat((1, 1, m))  # [bs, n, m]
-    b_square = b_square.repeat((1, n, 1))  # [bs, n, m]
+    b_square = b_square.repeat((1, n, 1))  # [bs, n, m]#///
 
     coor = torch.matmul(a, b.transpose(1, 2))  # [bs, n, m]
 
