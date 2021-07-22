@@ -29,14 +29,23 @@ def create_dataloader():
 
 
 def get_label(data, li_origin_index):
+    """
+
+    @param data:
+    cls_label:
+    reg_label:(B, N, 7)
+    @param li_origin_index: (B, 256)
+    @return:
+    """
     label = {}
-    cls_label = torch.from_numpy(data['rpn_cls_label']).cuda()
+    cls_label = torch.from_numpy(data['cls_label']).cuda()
     cls_label = torch.gather(cls_label, dim=1, index=li_origin_index.long())  # B, N=1,256.
 
-    reg_label = torch.from_numpy(data['rpn_reg_label']).cuda()
+    reg_label = torch.from_numpy(data['reg_label']).cuda()
     B, N, _ = reg_label.size()  # 1,16384,7
     # reg_label = reg_label.reshape(B, N * _)  # 下面的torch.gather 必须要求换一下维度
-    reg_label = torch.gather(reg_label, dim=1, index=li_origin_index.long())
+    li_origin_index = li_origin_index.unsqueeze(-1).repeat(1, 1, 7)  # B,256,7
+    reg_label = torch.gather(reg_label, dim=1, index=li_origin_index.long())  # B,256,7
 
     reg_label = reg_label.reshape(B, -1, _)
 

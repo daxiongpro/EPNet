@@ -123,10 +123,10 @@ class Loss(nn.Module):
     def __init__(self):
         super(Loss, self).__init__()
 
-    def forward(self, output, label):
+    def forward(self, predict, label):
         """
 
-        @param output:
+        @param predict:
         'cls_head': (B, N, 1),
         'reg_head': (B, N, 7),
         'candidate_xyz': (B, N, 3),
@@ -139,15 +139,15 @@ class Loss(nn.Module):
         @return:
         """
         # 分类损失
-        pre_cls = output['cls_head'].squeeze(-1)  # (B,N)
-        label_cls = label['cls_label'].long()
+        pre_cls = predict['cls_head'].squeeze(-1)  # (B,N)
+        label_cls = predict['cls_label'].long()
         assert pre_cls.size(1) == label_cls.size(1)  # N的个数一样
         B, N, _ = pre_cls.size()
         loss_fn = ClsLoss(N)
         cls_loss = loss_fn(pre_cls, label_cls)
 
         # 回归损失
-        pre_reg = output['reg_head']
+        pre_reg = predict['reg_head']
         label_reg = label['reg_label']
         assert pre_reg.size(1) == label_reg.size(1)
         B, N, _ = pre_reg.size()
@@ -155,7 +155,7 @@ class Loss(nn.Module):
         reg_loss = loss_fn(pre_reg, label_reg)
 
         # shift损失
-        pre_shift = output['candidate_xyz']  # BN3
+        pre_shift = predict['candidate_xyz']  # BN3
         label_shift = label['reg_label'][:, :, 0:3]  # BN3
         assert pre_shift.size() == label_shift.size()
         B, N, _ = pre_shift.size()
