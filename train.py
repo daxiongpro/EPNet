@@ -4,7 +4,7 @@ import os
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
+from lib.datasets.kitti_ssd_dataset import KittiSSDDataset
 from lib.net.PI_SSD import PISSD
 from lib.net.loss_func import Loss
 

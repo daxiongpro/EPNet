@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from lib.net.PI_SSD import PISSD
-from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
+from lib.datasets.kitti_ssd_dataset import KittiSSDDataset
 import tools.train_utils.train_utils as train_utils
 from datasets.bbox_transform import decode_bbox_target
 from tools.kitti_object_eval_python.evaluate import evaluate as kitti_evaluate
@@ -819,7 +819,7 @@ def eval_single_ckpt(root_result_dir):
     os.makedirs(backup_dir, exist_ok=True)
     os.system('cp *.py %s/' % backup_dir)
     os.system('cp ../lib/net/*.py %s/' % backup_dir)
-    os.system('cp ../lib/datasets/kitti_rcnn_dataset.py %s/' % backup_dir)
+    os.system('cp ../lib/datasets/kitti_ssd_dataset.py %s/' % backup_dir)
 
     # load checkpoint
     load_ckpt_based_on_args(model, logger)
@@ -873,7 +873,7 @@ def repeat_eval_ckpt(root_result_dir, ckpt_dir):
     os.makedirs(backup_dir, exist_ok=True)
     os.system('cp *.py %s/' % backup_dir)
     os.system('cp ../lib/net/*.py %s/' % backup_dir)
-    os.system('cp ../lib/datasets/kitti_rcnn_dataset.py %s/' % backup_dir)
+    os.system('cp ../lib/datasets/kitti_ssd_dataset.py %s/' % backup_dir)
 
     # evaluated ckpt record
     ckpt_record_file = os.path.join(root_result_dir, 'eval_list_%s.txt' % cfg.TEST.SPLIT)

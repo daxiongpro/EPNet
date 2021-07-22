@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from lib.config import cfg
-from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
+from lib.datasets.kitti_ssd_dataset import KittiSSDDataset
 from lib.net.fusion_layer import FusionLayer
 
 npoints = [[4096], [512], [256, 256], [256, 0]]

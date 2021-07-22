@@ -11,7 +11,7 @@ import lib.utils.roipool3d.roipool3d_utils as roipool3d_utils
 from lib.datasets.kitti_dataset import KittiDataset
 import argparse
 
-from lib.datasets.kitti_rcnn_dataset import interpolate_img_by_xy
+from lib.datasets.kitti_ssd_dataset import interpolate_img_by_xy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--save_dir', type=str, default='./gt_database')

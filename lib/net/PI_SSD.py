@@ -5,7 +5,7 @@ import torch.nn as nn
 # from lib.config import cfg
 from torch.utils.data import DataLoader
 
-from lib.datasets.kitti_rcnn_dataset import KittiSSDDataset
+from lib.datasets.kitti_ssd_dataset import KittiSSDDataset
 from lib.net.CG_layer import CGLayer
 from lib.net.fusion_layer import FusionLayer
 from lib.net.head import RegHead, ClsHead

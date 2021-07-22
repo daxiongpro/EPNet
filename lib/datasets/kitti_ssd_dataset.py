@@ -321,8 +321,8 @@ class KittiSSDDataset(KittiDataset):
         'pts_rect',点云在相机坐标系下的坐标(N, 3)
         'pts_features',输入的点云特征，初始为光照强度
         ----------------------------------------------label：
-        'rpn_cls_label',分类标签
-        'rpn_reg_label',回归标签(N,7)。判断这N 个点是否在box内部，若是则是这个点对应的box回归值
+        'cls_label',分类标签
+        'reg_label',回归标签(N,7)。判断这N 个点是否在box内部，若是则是这个点对应的box回归值
         'gt_boxes3d'真实回归框(M,7)
         ])
         """
@@ -420,12 +420,12 @@ class KittiSSDDataset(KittiDataset):
             return sample_info
 
         # generate training labels
-        rpn_cls_label, rpn_reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
+        cls_label, reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
         sample_info['pts_input'] = pts_input  # xyz_intensity坐标
         sample_info['pts_rect'] = aug_pts_rect  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
         sample_info['pts_features'] = ret_pts_features
-        sample_info['rpn_cls_label'] = rpn_cls_label  # (16384,)
-        sample_info['rpn_reg_label'] = rpn_reg_label  # (16384, 7)
+        sample_info['cls_label'] = cls_label  # (16384,)
+        sample_info['reg_label'] = reg_label  # (16384, 7)
         sample_info['gt_boxes3d'] = aug_gt_boxes3d
         return sample_info
 
@@ -484,23 +484,39 @@ if __name__ == '__main__':
                                 classes=cfg.CLASSES)
 
     item0 = train_set[0]
-    print(item0)
-    pts = item0['pts_input']
-    pts = torch.tensor(pts).cuda()
-    net = PointnetSAModuleMSG(
-        npoint=4096,  # [4096, 1024, 256, 64]
-        radii=[0.1, 0.5],  # [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
-        nsamples=[16, 32],  # [[16, 32], [16, 32], [16, 32], [16, 32]]
-        mlps=[[1, 16, 32], [1, 16, 32]],  # mlps = cfg.RPN.SA_CONFIG.MLPS[k].copy()
-        use_xyz=True,
-        bn=True
-    ).cuda()
+    # print(item0)
+    for key in item0.keys():
+        if type(item0[key]) is np.ndarray:
+            print(key, ":", "(numpy.ndarray)", item0[key].shape)
+        else:
+            print(key, ":", item0[key])
 
-    B = 2
-    N = 16384
-    C = 16
-    xyz = pts[..., 0:3].contiguous().unsqueeze(0)
-    features = pts[..., 3:].contiguous().unsqueeze(0).transpose(1, 2)
-    new_xyz = None
 
-    out = net(xyz, features, new_xyz)
+    # img = item0['img']
+    # pts_origin_xy = item0['pts_origin_xy']
+    # aug_method = item0['aug_method']
+    # pts_input = item0['pts_input']
+    # pts_rect = item0['pts_rect']
+    # pts_features = item0['pts_features']
+    # cls_label = item0['cls_label']
+    # reg_label = item0['reg_label']
+    # gt_boxes3d = item0['gt_boxes3d']
+
+    # pts_input = torch.tensor(pts_input).cuda()
+    # net = PointnetSAModuleMSG(
+    #     npoint=4096,  # [4096, 1024, 256, 64]
+    #     radii=[0.1, 0.5],  # [[0.1, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 4.0]]
+    #     nsamples=[16, 32],  # [[16, 32], [16, 32], [16, 32], [16, 32]]
+    #     mlps=[[1, 16, 32], [1, 16, 32]],  # mlps = cfg.RPN.SA_CONFIG.MLPS[k].copy()
+    #     use_xyz=True,
+    #     bn=True
+    # ).cuda()
+    #
+    # B = 2
+    # N = 16384
+    # C = 16
+    # xyz = pts[..., 0:3].contiguous().unsqueeze(0)
+    # features = pts[..., 3:].contiguous().unsqueeze(0).transpose(1, 2)
+    # new_xyz = None
+    #
+    # out = net(xyz, features, new_xyz)
