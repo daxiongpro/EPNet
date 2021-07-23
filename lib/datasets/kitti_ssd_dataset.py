@@ -1,15 +1,11 @@
-import logging
 import numpy as np
 import os
 import pickle
 import torch
 from lib.datasets.kitti_dataset import KittiDataset
-import lib.datasets.kitti_utils as kitti_utils
+import lib.datasets.utils.kitti_utils as kitti_utils
 from lib.config import cfg
 from torch.nn.functional import grid_sample
-
-
-# from pointnet2_lib.pointnet2.pointnet2_modules import PointnetSAModuleMSG
 
 
 def interpolate_img_by_xy(img, xy, normal_shape):
@@ -83,23 +79,21 @@ class KittiSSDDataset(KittiDataset):
                             hard_list.append(obj)
                     self.gt_database = [easy_list, hard_list]
             if mode == 'TRAIN':
-                self.preprocess_rpn_training_data()
+                self.preprocess_training_data()
             else:
                 self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
         elif cfg.RCNN.ENABLED:
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
 
-    def preprocess_rpn_training_data(self):
+    def preprocess_training_data(self):
         """
-        Discard samples which don't have current classes, which will not be used for training.
+        Discard丢弃 samples which don't have current classes, which will not be used for training.
         Valid sample_id is stored in self.sample_id_list
         """
         for idx in range(0, self.num_sample):
             sample_id = int(self.image_idx_list[idx])
             obj_list = self.filtrate_objects(self.get_label(sample_id))
-            # if cfg.LI_FUSION.ENABLED:  #####
             if len(obj_list) == 0:
-                # self.logger.info('No gt classes: %06d' % sample_id)
                 continue
             self.sample_id_list.append(sample_id)
 
@@ -185,7 +179,7 @@ class KittiSSDDataset(KittiDataset):
         return pts_valid_flag
 
     @staticmethod
-    def generate_rpn_training_labels(pts_rect, gt_boxes3d):
+    def generate_training_labels(pts_rect, gt_boxes3d):
         """
         判断pts_rect中的点是否在gt_boxes3d内部，如果是，则pts_rect对应的cls_label赋为对应的标签
         :param pts_rect: 点云在img坐标系的坐标
@@ -294,15 +288,8 @@ class KittiSSDDataset(KittiDataset):
         return aug_pts_rect, aug_gt_boxes3d, aug_method
 
     def __len__(self):
-        if cfg.RPN.ENABLED:
-            return len(self.sample_id_list)
-        elif cfg.RCNN.ENABLED:
-            if self.mode == 'TRAIN':
-                return len(self.sample_id_list)
-            else:
-                return len(self.image_idx_list)
-        else:
-            raise NotImplementedError
+        return len(self.sample_id_list)
+        # return len(self.image_idx_list)
 
     def __getitem__(self, index):
         """获取单个样本。每个值都是numpy类型。
@@ -335,7 +322,7 @@ class KittiSSDDataset(KittiDataset):
         # get valid point (projected points should be in image)
         pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标(N,3)
         pts_intensity = pts_lidar[:, 3]
-        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云投影到深度图(N,2)，深度图的深度
+        pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云在img上的坐标(N,2)，深度图的深度
         img_shape = self.get_image_shape(sample_id)
         pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
         pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
@@ -377,7 +364,8 @@ class KittiSSDDataset(KittiDataset):
         ret_pts_features = np.concatenate(pts_features, axis=1) \
             if pts_features.__len__() > 1 else pts_features[0]  # 将特征拼接起来(N,C)
 
-        sample_info = {'sample_id': sample_id, 'random_select': self.random_select,
+        sample_info = {'sample_id': sample_id,
+                       'random_select': self.random_select,
                        'img': img,
                        'pts_origin_xy': ret_pts_origin_xy}
 
@@ -412,15 +400,8 @@ class KittiSSDDataset(KittiDataset):
         else:
             pts_input = aug_pts_rect
 
-        if cfg.RPN.FIXED:  # False
-            sample_info['pts_input'] = pts_input
-            sample_info['pts_rect'] = aug_pts_rect
-            sample_info['pts_features'] = ret_pts_features
-            sample_info['gt_boxes3d'] = aug_gt_boxes3d
-            return sample_info
-
         # generate training labels
-        cls_label, reg_label = self.generate_rpn_training_labels(aug_pts_rect, aug_gt_boxes3d)
+        cls_label, reg_label = self.generate_training_labels(aug_pts_rect, aug_gt_boxes3d)
         sample_info['pts_input'] = pts_input  # xyz_intensity坐标
         sample_info['pts_rect'] = aug_pts_rect  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
         sample_info['pts_features'] = ret_pts_features
@@ -490,7 +471,6 @@ if __name__ == '__main__':
             print(key, ":", "(numpy.ndarray)", item0[key].shape)
         else:
             print(key, ":", item0[key])
-
 
     # img = item0['img']
     # pts_origin_xy = item0['pts_origin_xy']
