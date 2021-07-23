@@ -313,31 +313,29 @@ class KittiSSDDataset(KittiDataset):
         'gt_boxes3d'真实回归框(M,7)
         ])
         """
+        sample_info = {}  # 输出数据字典
+
         sample_id = int(self.sample_id_list[index])
-        # 不做数据增强。# if sample_id < 10000:
-        calib = self.get_calib(sample_id)
+        sample_info['sample_id'] = sample_id
         img = self.get_image_rgb_with_normal(sample_id)
-        pts_lidar = self.get_lidar(sample_id)
+        sample_info['img'] = img
 
         # get valid point (projected points should be in image)
+        # 不做数据增强
+        calib = self.get_calib(sample_id)
+        pts_lidar = self.get_lidar(sample_id)
         pts_rect = calib.lidar_to_rect(pts_lidar[:, 0:3])  # 点云在相机坐标系下的坐标(N,3)
-        pts_intensity = pts_lidar[:, 3]
         pts_img, pts_rect_depth = calib.rect_to_img(pts_rect)  # 点云在img上的坐标(N,2)，深度图的深度
         img_shape = self.get_image_shape(sample_id)
         pts_valid_flag = self.get_valid_flag(pts_rect, pts_img, pts_rect_depth, img_shape)
-        pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 少见写法，可以借鉴
+        pts_rect = pts_rect[pts_valid_flag][:, 0:3]  # 过滤掉在lidar相机上但不在img上的点
         """
         >>> a = np.array([1, 2, 3])
         >>> b = np.array([ True, False,  True])
         >>> a[b]
         array([1, 3])
         """
-        pts_intensity = pts_intensity[pts_valid_flag]
-        pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
-
-        # generate inputs
-        # 选取16384个点
-        # make sure len(pts_rect) ==self.npoints
+        # 选取16384个点  # make sure len(pts_rect) ==self.npoints
         if self.npoints < len(pts_rect):
             pts_depth = pts_rect[:, 2]  # (N,1)
             pts_near_flag = pts_depth < 40.0
@@ -356,59 +354,40 @@ class KittiSSDDataset(KittiDataset):
             choice = np.concatenate((choice, extra_choice), axis=0)
             np.random.shuffle(choice)
 
+        pts_origin_xy = pts_img[pts_valid_flag]  # 点云在img上的坐标
+        sample_info['pts_origin_xy'] = pts_origin_xy[choice, :]  # 16384,2
         ret_pts_rect = pts_rect[choice, :]  # (N,3)
-        ret_pts_intensity = pts_intensity[choice] - 0.5  # translate intensity to [-0.5, 0.5]
-        ret_pts_origin_xy = pts_origin_xy[choice, :]
-
-        pts_features = [ret_pts_intensity.reshape(-1, 1)]  # 列表，列表每个元素为(N,1)，代表一种特征。初始点云的特征为强度
-        ret_pts_features = np.concatenate(pts_features, axis=1) \
-            if pts_features.__len__() > 1 else pts_features[0]  # 将特征拼接起来(N,C)
-
-        sample_info = {'sample_id': sample_id,
-                       'random_select': self.random_select,
-                       'img': img,
-                       'pts_origin_xy': ret_pts_origin_xy}
 
         if self.mode == 'TEST':  # 如果是TEST，则不用数据增强和标签
-            if cfg.RPN.USE_INTENSITY:
-                pts_input = np.concatenate((ret_pts_rect, ret_pts_features), axis=1)  # (N, 3+C)
-            else:
-                pts_input = ret_pts_rect
-            sample_info['pts_input'] = pts_input
+            sample_info['pts_input'] = ret_pts_rect
             sample_info['pts_rect'] = ret_pts_rect
-            sample_info['pts_features'] = ret_pts_features
-
+            sample_info['pts_features'] = None
             return sample_info
-
-        gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
-        gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)
-        gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)  # 旋转角度
-        for k, obj in enumerate(gt_obj_list):
-            gt_alpha[k] = obj.alpha
-
-        # data augmentation
-        aug_pts_rect = ret_pts_rect.copy()
-        aug_gt_boxes3d = gt_boxes3d.copy()
-        if cfg.AUG_DATA and self.mode == 'TRAIN':
-            aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(aug_pts_rect, aug_gt_boxes3d, gt_alpha,
+        elif self.mode == 'TRAIN':
+            # 数据增强
+            gt_obj_list = self.filtrate_objects(self.get_label(sample_id))
+            gt_boxes3d = kitti_utils.objs_to_boxes3d(gt_obj_list)
+            gt_alpha = np.zeros((gt_obj_list.__len__()), dtype=np.float32)  # 旋转角度，都为0，占位
+            for k, obj in enumerate(gt_obj_list):
+                gt_alpha[k] = obj.alpha  # 给占位赋值
+            aug_pts_rect, aug_gt_boxes3d, aug_method = self.data_augmentation(ret_pts_rect.copy(),
+                                                                              gt_boxes3d.copy(),
+                                                                              gt_alpha,
                                                                               sample_id)
+            sample_info['pts_rect'] = aug_pts_rect  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
+            sample_info['gt_boxes3d'] = aug_gt_boxes3d
             sample_info['aug_method'] = aug_method
 
-        # prepare input
-        if cfg.RPN.USE_INTENSITY:
-            pts_input = np.concatenate((aug_pts_rect, ret_pts_features), axis=1)  # (N, C)
-        else:
-            pts_input = aug_pts_rect
+            pts_input = aug_pts_rect  # 本来是要加上强度的，本代码删除了所有强度
+            sample_info['pts_input'] = pts_input  # xyz_intensity坐标
+            sample_info['pts_features'] = None
 
-        # generate training labels
-        cls_label, reg_label = self.generate_training_labels(aug_pts_rect, aug_gt_boxes3d)
-        sample_info['pts_input'] = pts_input  # xyz_intensity坐标
-        sample_info['pts_rect'] = aug_pts_rect  # 点云在相机坐标系下坐标 pts_rect: (N, 3)
-        sample_info['pts_features'] = ret_pts_features
-        sample_info['cls_label'] = cls_label  # (16384,)
-        sample_info['reg_label'] = reg_label  # (16384, 7)
-        sample_info['gt_boxes3d'] = aug_gt_boxes3d
-        return sample_info
+            # 获取标签
+            cls_label, reg_label = self.generate_training_labels(aug_pts_rect, aug_gt_boxes3d)
+            sample_info['cls_label'] = cls_label  # (16384,)
+            sample_info['reg_label'] = reg_label  # (16384, 7)
+
+            return sample_info
 
     def collate_batch(self, batch):
         """
