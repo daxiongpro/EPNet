@@ -398,7 +398,7 @@ class KittiSSDDataset(KittiDataset):
         @param batch:
         @return:dict
         """
-        if self.mode != 'TRAIN' and cfg.RCNN.ENABLED and not cfg.RPN.ENABLED:
+        if self.mode != 'TRAIN':
             assert batch.__len__() == 1
             return batch[0]
 
@@ -406,8 +406,7 @@ class KittiSSDDataset(KittiDataset):
         ans_dict = {}
 
         for key in batch[0].keys():
-            if cfg.RPN.ENABLED and key == 'gt_boxes3d' or \
-                    (cfg.RCNN.ENABLED and cfg.RCNN.ROI_SAMPLE_JIT and key in ['gt_boxes3d', 'roi_boxes3d']):
+            if key in ['gt_boxes3d', 'roi_boxes3d']:
                 max_gt = 0
                 for k in range(batch_size):
                     max_gt = max(max_gt, batch[k][key].__len__())
@@ -415,21 +414,23 @@ class KittiSSDDataset(KittiDataset):
                 for i in range(batch_size):
                     batch_gt_boxes3d[i, :batch[i][key].__len__(), :] = batch[i][key]
                 ans_dict[key] = batch_gt_boxes3d
-                continue
 
-            if isinstance(batch[0][key], np.ndarray):
+            elif isinstance(batch[0][key], np.ndarray):
                 if batch_size == 1:
                     ans_dict[key] = batch[0][key][np.newaxis, ...]
                 else:
                     ans_dict[key] = np.concatenate([batch[k][key][np.newaxis, ...] for k in range(batch_size)],
                                                    axis=0)
 
-            else:
+            else:  # True等非数字类型的
                 ans_dict[key] = [batch[k][key] for k in range(batch_size)]
                 if isinstance(batch[0][key], int):
                     ans_dict[key] = np.array(ans_dict[key], dtype=np.int32)
                 elif isinstance(batch[0][key], float):
                     ans_dict[key] = np.array(ans_dict[key], dtype=np.float32)
+
+            if isinstance(ans_dict[key], np.ndarray):  # 将所有的key转换成tensor
+                ans_dict[key] = torch.from_numpy(ans_dict[key])
 
         return ans_dict
 
