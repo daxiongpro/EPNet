@@ -56,13 +56,14 @@ class PISSD(nn.Module):
                         'candidate_xyz': (B, N, 3), 作偏移量损失
                         'candidate_features': (B, C, N)}
         """
-        pts_input = torch.from_numpy(input_data['pts_input']).cuda()
-        img_input = torch.from_numpy(input_data['img']).float().permute(0, 3, 1, 2).contiguous().cuda()
-        xy_input = torch.from_numpy(input_data['pts_origin_xy']).cuda()
+        pts_input = input_data['pts_input'].cuda()
+        pts_rect = input_data['pts_rect'].cuda()
+        img_input = input_data['img'].float().permute(0, 3, 1, 2).contiguous().cuda()
+        xy_input = input_data['pts_origin_xy'].cuda()
 
         # 将图片融合进模型
         backbone_xyz, backbone_features, li_origin_index = \
-            self.backbone_net(pts_input, img_input, xy_input)  # (B, N, 3), (B, C, N)=(B, 512,3) (B, 256,512)
+            self.backbone_net(pts_rect, img_input, xy_input)  # (B, N, 3), (B, C, N)=(B, 512,3) (B, 256,512)
         ffps_xyz = backbone_xyz[:, backbone_xyz.shape[1] // 2:, :]  # 取f-fps采样的点(前一半的点)，送到cg layer里面
         ffps_features = backbone_features[:, :, backbone_features.shape[2] // 2:]
         candidate_xyz, candidate_features = self.cg_layer(ffps_xyz=ffps_xyz,

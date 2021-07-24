@@ -19,7 +19,7 @@ def create_dataloader():
                                 mode='TRAIN',
                                 classes='Car')
     train_loader = DataLoader(train_set,
-                              batch_size=1,
+                              batch_size=2,
                               pin_memory=True,
                               num_workers=6,
                               shuffle=True,
@@ -60,14 +60,14 @@ if __name__ == '__main__':
 
     train_loader = create_dataloader()
     net = PISSD()
-    # net = nn.DataParallel(net)  # 两个gpudebug不进去
+    net = nn.DataParallel(net)  # 两个gpudebug不进去
     net = net.cuda()
 
     for epoch in range(epoch_num):
         for i, data in enumerate(train_loader):
             out = net(data)
+            print(out)
             label = get_label(data, out['li_origin_index'])
-
             loss_fn = Loss()
             loss = loss_fn(out, label)  # label 在input里面
             print('epoch', epoch, '-----i', i, '-----loss', loss)
