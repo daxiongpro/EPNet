@@ -54,7 +54,7 @@ class RegLoss(nn.Module):
         L_dist = (predict_xyz - label_xyz) ** 2  # B,N,3
         L_dist = torch.sum(L_dist, dim=2)  # B,N
         L_dist = torch.sqrt(L_dist)  # B,N
-        L_dist = smooth_l1_loss(L_dist, torch.zeros((B, N)))  # 距离越小越好，拟合全零
+        L_dist = smooth_l1_loss(L_dist, torch.zeros((B, N)).cuda())  # 距离越小越好，拟合全零
 
         # -------------------------------------计算L_size
         h, w, l = out[:, :, 4], out[:, :, 5], out[:, :, 6]
@@ -90,7 +90,7 @@ class RegLoss(nn.Module):
         dis = torch.sum(dis, dim=2)  # (B,N)
 
         # corner_dist = torch.norm(out_corner - target_corner, p=2, dim=3)  # 绝对值loss.(B, N, 8)
-        L_corner = smooth_l1_loss(dis, torch.zeros(B, N))  # 单个值
+        L_corner = smooth_l1_loss(dis, torch.zeros(B, N).cuda())  # 单个值
 
         loss = L_dist + L_size + L_angle + L_corner
         return loss
@@ -139,8 +139,8 @@ class Loss(nn.Module):
         @return:
         """
         # 分类损失
-        pre_cls = predict['cls_head'].squeeze(-1)  # (B,N)
-        label_cls = predict['cls_label'].long()
+        pre_cls = predict['cls_head'].squeeze(-1)  # (B,N)#需要修改，压缩在网络内完成
+        label_cls = label['cls_label'].long()
         assert pre_cls.size(1) == label_cls.size(1)  # N的个数一样
         B, N, _ = pre_cls.size()
         loss_fn = ClsLoss(N)

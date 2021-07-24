@@ -38,19 +38,19 @@ def get_label(data, li_origin_index):
     @return:
     """
     label = {}
-    cls_label = torch.from_numpy(data['cls_label']).cuda()
+    cls_label = data['cls_label'].cuda()
     cls_label = torch.gather(cls_label, dim=1, index=li_origin_index.long())  # B, N=1,256.
 
-    reg_label = torch.from_numpy(data['reg_label']).cuda()
-    B, N, _ = reg_label.size()  # 1,16384,7
+    reg_label = data['reg_label'].cuda()
+    # B, N, _ = reg_label.size()  # 1,16384,7
     # reg_label = reg_label.reshape(B, N * _)  # 下面的torch.gather 必须要求换一下维度
     li_origin_index = li_origin_index.unsqueeze(-1).repeat(1, 1, 7)  # B,256,7
     reg_label = torch.gather(reg_label, dim=1, index=li_origin_index.long())  # B,256,7
 
-    reg_label = reg_label.reshape(B, -1, _)
+    # reg_label = reg_label.reshape(B, -1, _)
 
-    label['cls_label'] = cls_label.float()
-    label['reg_label'] = reg_label.float()
+    label['cls_label'] = cls_label  # int32
+    label['reg_label'] = reg_label  # float32
 
     return label
 
