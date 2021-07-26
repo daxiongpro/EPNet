@@ -22,7 +22,11 @@ class ClsLoss(nn.Module):
         cross_entropy_loss = nn.CrossEntropyLoss()
         B, N, C = x.size()
 
-        cls_loss = cross_entropy_loss(x.reshape(B*N, C), target.reshape(B*N))
+        cls_loss = cross_entropy_loss(x.reshape(B * N, C), target.reshape(B * N) + 1)
+        """
+        target.reshape(B*N)+1
+        target中标签为-1,0,1三种；而交叉熵损失中，只能为(0~C-1)，所以我都+1
+        """
 
         return cls_loss
 
@@ -101,20 +105,20 @@ class ShiftLoss(nn.Module):
         self.N_p = N_p
         super(ShiftLoss, self).__init__()
 
-    def forward(self, x, target):
+    def forward(self, out, target):
         """
         shift损失。shift转换后的点，到物体中心点距离.smooth L1.
-        @param x:(B, N, 3)
+        @param out:(B, N, 3)
         @param target:(B, N, 3) 非物体的中心的点标0
         @return:
         """
         B, N, _ = out.size()
         smooth_l1_loss = nn.SmoothL1Loss()  # 计算batch中所有的loss平均值
 
-        L_dist = (x - target) ** 2  # B,N,3
+        L_dist = (out - target) ** 2  # B,N,3
         L_dist = torch.sum(L_dist, dim=2)  # B,N
         L_dist = torch.sqrt(L_dist)  # B,N
-        L_dist = smooth_l1_loss(L_dist, torch.zeros((B, N)))  # 距离越小越好，拟合全零
+        L_dist = smooth_l1_loss(L_dist, torch.zeros((B, N)).cuda())  # 距离越小越好，拟合全零
         loss = L_dist
         return loss
 

@@ -19,7 +19,7 @@ def create_dataloader():
                                 mode='TRAIN',
                                 classes='Car')
     train_loader = DataLoader(train_set,
-                              batch_size=2,
+                              batch_size=4,
                               pin_memory=True,
                               num_workers=6,
                               shuffle=True,
@@ -63,15 +63,26 @@ if __name__ == '__main__':
     net = nn.DataParallel(net)  # 两个gpudebug不进去
     net = net.cuda()
 
+    learning_rate = 0.0000000001
+    loss_fn = Loss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+
     for epoch in range(epoch_num):
+        loss_total = 0
         for i, data in enumerate(train_loader):
             out = net(data)
-            print(out)
+            # print(out)
             label = get_label(data, out['li_origin_index'])
-            loss_fn = Loss()
+
             loss = loss_fn(out, label)  # label 在input里面
             print('epoch', epoch, '-----i', i, '-----loss', loss)
+
             loss.backward()
+            optimizer.step()
+            loss_total += loss.item()
+
+        print('total loss: {}'.format(loss_total))
+
         if (epoch + 1) % 5 == 0:
             # 保存参数
             torch.save(net.state_dict(), 'output/PISSD{}.ckpt'.format(epoch))
