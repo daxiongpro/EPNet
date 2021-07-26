@@ -71,6 +71,7 @@ class RegLoss(nn.Module):
         L_angle = smooth_l1_loss(out[:, :, 6], target[:, :, 6])  # 角度拟合label
 
         # -------------------------------------计算L_corner
+        # 加了这个损失出现Nan
         """
                 7 -------- 4
                /|         /|
@@ -87,7 +88,7 @@ class RegLoss(nn.Module):
         经过函数后再把B这个维度给还原回来
         """
         out_corner = boxes_to_corners_3d(out.reshape(B * N, 7)).reshape(B, N, 8, 3)
-        target_corner = boxes_to_corners_3d(out.reshape(B * N, 7)).reshape(B, N, 8, 3)
+        target_corner = boxes_to_corners_3d(target.reshape(B * N, 7)).reshape(B, N, 8, 3)
         dis = (out_corner - target_corner) ** 2
         dis = torch.sum(dis, dim=3)  # (B,N,8)
         dis = torch.sqrt(dis)
@@ -96,7 +97,8 @@ class RegLoss(nn.Module):
         # corner_dist = torch.norm(out_corner - target_corner, p=2, dim=3)  # 绝对值loss.(B, N, 8)
         L_corner = smooth_l1_loss(dis, torch.zeros(B, N).cuda())  # 单个值
 
-        loss = L_dist + L_size + L_angle + L_corner
+        # loss = L_dist + L_size + L_angle + L_corner
+        loss = L_dist + L_size + L_angle
         return loss
 
 
@@ -168,6 +170,7 @@ class Loss(nn.Module):
 
         # 总loss
         loss = cls_loss + reg_loss + shift_loss
+
         return loss
 
 

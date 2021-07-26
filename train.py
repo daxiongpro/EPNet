@@ -63,7 +63,7 @@ if __name__ == '__main__':
     net = nn.DataParallel(net)  # 两个gpudebug不进去
     net = net.cuda()
 
-    learning_rate = 0.0000000001
+    learning_rate = 0.01
     loss_fn = Loss()
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
@@ -75,14 +75,15 @@ if __name__ == '__main__':
             label = get_label(data, out['li_origin_index'])
 
             loss = loss_fn(out, label)  # label 在input里面
-            print('epoch', epoch, '-----i', i, '-----loss', loss)
+            print('epoch', epoch, '-----i', i, '-----loss', loss, '-----total loss', loss_total)
 
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             loss_total += loss.item()
 
         print('total loss: {}'.format(loss_total))
 
-        if (epoch + 1) % 5 == 0:
+        if (epoch + 1) % 1 == 0:
             # 保存参数
-            torch.save(net.state_dict(), 'output/PISSD{}.ckpt'.format(epoch))
+            torch.save(net.state_dict(), 'output/PISSD{}.ckpt'.format(epoch + 1))
