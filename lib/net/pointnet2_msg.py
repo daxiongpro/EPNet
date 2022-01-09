@@ -228,6 +228,24 @@ class Pointnet2MSG(nn.Module):
             l_xyz.append(li_xyz)
             l_features.append(li_features)
 
+            # if i == 0:
+            #     import matplotlib.pyplot as plt
+            #     def tensor_to_np(tensor):
+            #         img = tensor.mul(255).byte()
+            #         img = img.cpu().numpy().squeeze(0).transpose((0, 1, 2))
+            #         return img
+            #
+            #     def show_from_tensor(tensor, title=None):
+            #         img = tensor.clone()
+            #         img = tensor_to_np(img)
+            #         plt.figure()
+            #         for i in img:
+            #             plt.imshow(i)
+            #             if title is not None:
+            #                 plt.title(title)
+            #             plt.pause(1)
+            #
+            #     show_from_tensor(image)
 
         for i in range(-1, -(len(self.FP_modules) + 1), -1):
             l_features[i - 1] = self.FP_modules[i](
