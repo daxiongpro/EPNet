@@ -235,4 +235,6 @@ class Trainer(object):
                 pbar = tqdm.tqdm(total = len(train_loader), leave = False, desc = 'train')
                 pbar.set_postfix(dict(total_it = it))
 
+                if epoch in [0, 1, 2, 4, 10, 20, 30, 49, 50]:
+                    torch.save(self.model, './log/epnet_model_' + str(epoch))
         return None
