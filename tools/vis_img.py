@@ -136,10 +136,10 @@ class GTDatabaseGenerator(KittiDataset):
                 print(img[pts_img[i][1], pts_img[i][0], :], cur_pts_rgb[i, :])
                 img_mask[pts_img[i][1], pts_img[i][0], :] = cur_pts_rgb[i, :]
 
-            # cv2.imshow('gene',img_mask)
-            # cv2.startWindowThread()
+            cv2.imshow('gene',img_mask)
+            cv2.startWindowThread()
             # cv2.waitKey()
-            input()
+            # input()
 
             #
             # cat_lidar = np.concatenate([pts_lidar, cur_pts_rgb], axis = 1)
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     #
     # dataset.generate_rgb_database()
     # # args.split=
-    dataset = GTDatabaseGenerator(root_dir = '../../data/', split = 'train')
+    dataset = GTDatabaseGenerator(root_dir = '../data/', split = 'train')
     dataset.vis_img()
 
     # gt_database = pickle.load(open('gt_database/train_gt_database.pkl', 'rb'))
