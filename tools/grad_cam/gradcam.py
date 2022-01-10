@@ -111,22 +111,25 @@ class GradCam():
 if __name__ == '__main__':
     # Get params
     target_example = 0  # Snake
+    # pretrained_model = torch.load("../log/Car/full_epnet_without_iou_branch/ckpt/checkpoint_epoch_50.pth")
+    # pretrained_model = PointRCNN(num_classes=2, use_xyz=True, mode='TRAIN')
+    # pretrained_model = torch.nn.DataParallel(pretrained_model).cuda()
+    pretrained_model = torch.load('../log/epnet_model_0')  # load model
+    checkpoint = torch.load('../log/Car/full_epnet_without_iou_branch/ckpt/checkpoint_epoch_50.pth')
+    pretrained_model.module.load_state_dict(checkpoint['model_state'])  # load state dict
 
-    for i in range(3000):
-        example_list = (('../../data/KITTI/object/training/image_2/%06d.png' % i, None),)
-        (original_image, prep_img, target_class, file_name_to_export, pretrained_model) = get_example_params(
-            target_example,
-            example_list)
-        # pretrained_model = torch.load("../log/Car/full_epnet_without_iou_branch/ckpt/checkpoint_epoch_50.pth")
-        pretrained_model = PointRCNN(num_classes=2, use_xyz=True, mode='TRAIN')
-        # pretrained_model = torch.nn.DataParallel(pretrained_model).cuda()
-        pretrained_model = torch.load('../log/epnet_model_0')  # load model
-        checkpoint = torch.load('../log/Car/full_epnet_without_iou_branch/ckpt/checkpoint_epoch_50.pth')
-        pretrained_model.module.load_state_dict(checkpoint['model_state'])  # load state dict
-        # Grad cam
-        grad_cam = GradCam(pretrained_model, target_layer=3)
-        # Generate cam mask
-        cam = grad_cam.generate_cam(prep_img, target_class)
-        # Save mask
-        save_class_activation_images(original_image, cam, file_name_to_export)
+    for layer in range(3):
+        for i in range(3000):
+            example_list = (('../../data/KITTI/object/training/image_2/%06d.png' % i, None),)
+            (original_image, prep_img, target_class, file_name_to_export) = get_example_params(
+                target_example,
+                example_list)
+
+            # Grad cam
+            grad_cam = GradCam(pretrained_model, target_layer=layer)
+            # Generate cam mask
+            cam = grad_cam.generate_cam(prep_img, target_class)
+            # Save mask
+            save_class_activation_images(original_image, cam, file_name_to_export, layer)
+            print("layer %d _ image %06d saved!" % (layer, i))
     print('Grad cam completed')
